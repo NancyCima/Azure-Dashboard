@@ -1,14 +1,14 @@
-from fastapi import FastAPI, File, UploadFile, Form
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 import requests
-from typing import Optional
+import re
+from typing import Optional, List, Dict
 import json
 import openai
 import os
 from dotenv import load_dotenv
-from pydantic import BaseModel
 from bs4 import BeautifulSoup
-import re
+from services.ai_analysis import analyze_ticket, process_image, load_general_criteria
 
 load_dotenv()
 
@@ -26,6 +26,12 @@ app.add_middleware(
 # API URLs
 API_BASE_URL = "http://localhost:8080"  # Azure DevOps API
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Validate OpenAI API key
+if not OPENAI_API_KEY:
+    print("Warning: OPENAI_API_KEY not found in environment variables")
+else:
+    openai.api_key = OPENAI_API_KEY
 
 def clean_html_content(html_content: str) -> str:
     """
@@ -93,39 +99,9 @@ def filter_work_items(data):
 
     return filtered_data
 
-
 @app.get("/")
 async def root():
     return {"message": "Bienvenido a la API de la nueva aplicación"}
-
-@app.get("/workitems")
-async def get_work_items(state: str = None):
-    """
-    Endpoint para consumir work items desde la API.
-    """
-    try:
-        # Realiza una solicitud GET al endpoint de la API
-        url = f"{API_BASE_URL}/api/v1/workitems/work-items"
-        response = requests.get(url)
-        response.raise_for_status()
-
-        data = response.json()
-
-        # Limpiar el HTML en la descripción y criterios de aceptación
-        for item in data:
-            item['description'] = clean_html_content(item.get('description', ''))
-            item['acceptance_criteria'] = clean_html_content(item.get('acceptance_criteria', ''))
-
-        # Filtrar los work items utilizando la función externa
-        filtered_data = filter_work_items(data)
-        
-        if state:
-            filtered_data = [item for item in filtered_data if item.get("state") == state]
-        
-        return filtered_data
-
-    except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
 
 @app.get("/userstories")
 async def get_user_stories():
@@ -180,167 +156,103 @@ async def get_user_stories():
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
 
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-import requests
-import openai
-import os
-from dotenv import load_dotenv
-from typing import List, Optional
-import base64
-import uuid
+@app.get("/workitems")
+async def get_work_items(state: str = None):
+    """
+    Endpoint para consumir work items desde la API.
+    """
+    try:
+        # Realiza una solicitud GET al endpoint de la API
+        url = f"{API_BASE_URL}/api/v1/workitems/work-items"
+        response = requests.get(url)
+        response.raise_for_status()
 
-load_dotenv()
+        data = response.json()
 
-# Configuración de OpenAI para GPT-4o-mini
-openai.api_key = os.getenv("OPENAI_API_KEY")
+        # Limpiar el HTML en la descripción y criterios de aceptación
+        for item in data:
+            item['description'] = clean_html_content(item.get('description', ''))
+            item['acceptance_criteria'] = clean_html_content(item.get('acceptance_criteria', ''))
 
-class ImageMetadata:
-    def __init__(self, work_item_id, filename, base64_content, figma_link=None):
-        self.id = str(uuid.uuid4())
-        self.work_item_id = work_item_id
-        self.filename = filename
-        self.base64_content = base64_content
-        self.figma_link = figma_link
+        # Filtrar los work items utilizando la función externa
+        filtered_data = filter_work_items(data)
+        
+        if state:
+            filtered_data = [item for item in filtered_data if item.get("state") == state]
+        
+        return filtered_data
 
-# Almacenamiento temporal de imágenes (sustituir con base de datos en producción)
-UPLOADED_IMAGES = {}
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
-@app.post("/upload-images/{work_item_id}")
-async def upload_images(
-    work_item_id: int, 
+@app.post("/analyze-ticket")
+async def analyze_ticket_endpoint(
+    ticket: str = Form(...),
     files: List[UploadFile] = File(None),
     figma_link: Optional[str] = Form(None)
 ):
-    """
-    Endpoint para subir imágenes relacionadas a un work item.
-    """
+    """Endpoint para analizar un ticket usando IA. 
+    Sugiere criterios de aceptación y mejoras para el ticket, con opcion de adjuntar imagenes y link a Figma"""
     try:
-        uploaded_images = []
-        for file in files:
-            # Leer y codificar imagen
-            image_content = await file.read()
-            base64_image = base64.b64encode(image_content).decode('utf-8')
-            
-            # Crear metadatos de imagen
-            image_metadata = ImageMetadata(
-                work_item_id=work_item_id, 
-                filename=file.filename, 
-                base64_content=base64_image,
-                figma_link=figma_link
-            )
-            
-            # Almacenar imagen
-            UPLOADED_IMAGES[image_metadata.id] = image_metadata
-            
-            uploaded_images.append({
-                "id": image_metadata.id,
-                "filename": file.filename
-            })
+        ticket_data = json.loads(ticket)
+        general_criteria = load_general_criteria()
+        
+        # Process images if provided
+        images = []
+        if files:
+            for file in files:
+                content = await file.read()
+                base64_img = process_image(content)
+                if base64_img:
+                    images.append({
+                        "filename": file.filename,
+                        "base64": base64_img
+                    })
 
-        return {
-            "work_item_id": work_item_id,
-            "images": uploaded_images,
-            "figma_link": figma_link
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Add Figma link to context if provided
+        if figma_link:
+            ticket_data["figma_link"] = figma_link
 
-@app.get("/images/{work_item_id}")
-async def get_images_for_work_item(work_item_id: int):
-    """
-    Obtener imágenes asociadas a un work item.
-    """
-    work_item_images = [
-        img for img in UPLOADED_IMAGES.values() 
-        if img.work_item_id == work_item_id
-    ]
-    return work_item_images
-
-def analyze_ticket_with_gpt_4o_mini(ticket_data: dict, images: List[dict] = None) -> dict:
-    """
-    Analizar ticket con GPT-4o-mini, considerando imágenes opcionales.
-    """
-    try:
-        # Preparar prompt para análisis
-        messages = [
-            {
-                "role": "system", 
-                "content": """Analiza la coherencia, completitud y calidad de una historia de usuario. 
-                Evalúa:
-                - Claridad de descripción
-                - Completitud de criterios de aceptación
-                - Alineación con estándares de usabilidad
-                - Sugerencias de mejora"""
-            },
-            {
-                "role": "user", 
-                "content": [
-                    {"type": "text", "text": f"""Analiza la siguiente historia de usuario:
-                    Título: {ticket_data.get('title', 'Sin título')}
-                    Descripción: {ticket_data.get('description', 'Sin descripción')}
-                    Criterios de Aceptación: {ticket_data.get('acceptance_criteria', 'Sin criterios')}
-                    """}
-                ]
-            }
-        ]
-
-        # Agregar imágenes si están disponibles
-        if images:
-            for img in images:
-                messages[1]["content"].append({
-                    "type": "image_base64", 
-                    "image_base64": img['base64_content']
-                })
-
-        # Llamar a GPT-4o-mini
-        response = openai.ChatCompletion.create(
-            model="gpt-4o-mini",
-            messages=messages,
-            max_tokens=300
+        # Perform analysis
+        analysis_result = analyze_ticket(
+            ticket_data=ticket_data,
+            images=images,
+            general_criteria=general_criteria
         )
 
-        analysis_result = response.choices[0].message.content
-
         return {
-            "analysis": analysis_result,
-            "suggested_criteria": _extract_suggested_criteria(analysis_result)
+            "status": "success",
+            "criteria": analysis_result
         }
 
+    except json.JSONDecodeError:
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid ticket data format"
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(
+            status_code=500,
+            detail=str(e)
+        )
 
 @app.post("/mark-user-story-checked/{work_item_id}")
 async def mark_user_story_checked(work_item_id: int):
-    """
-    Marcar una historia de usuario como revisada añadiendo el tag 'US Checked'.
-    """
+    """Mark a user story as checked by adding the 'US Checked' tag"""
     try:
-        # En un escenario real, esto requeriría interacción con la API de Azure DevOps
         url = f"{API_BASE_URL}/api/v1/workitems/{work_item_id}/update-tags"
         payload = {
             "tags": ["US Checked"]
         }
         response = requests.post(url, json=payload)
         response.raise_for_status()
-
-        return {"status": "success", "message": "Historia marcada como revisada"}
+        return {"status": "success", "message": "User story marked as checked"}
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-def _extract_suggested_criteria(analysis_text: str) -> List[str]:
-    """
-    Extraer criterios sugeridos del texto de análisis.
-    """
-    # Lógica simplificada de extracción de criterios
-    lines = analysis_text.split('\n')
-    suggested_criteria = [
-        line.strip() for line in lines 
-        if line.strip().startswith('- ') or line.strip().startswith('* ')
-    ]
-    return suggested_criteria
 
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+

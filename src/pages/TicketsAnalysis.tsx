@@ -14,6 +14,7 @@ function TicketsAnalysis() {
     const [aiAnalysis, setAiAnalysis] = useState<{
         suggestedCriteria: string[];
         imageAnalysis?: string;
+        generalSuggestions?: string[];
     } | null>(null);
     const [copied, setCopied] = useState(false);
 
@@ -76,6 +77,11 @@ function TicketsAnalysis() {
         }
     };
 
+    const cleanHtmlContent = (html: string) => {
+        // Remove background-color styles from spans
+        return html.replace(/style="[^"]*background-color:[^"]*"/g, '');
+    };
+
     return (
         <div className="min-h-screen bg-white p-8">
             <div className="max-w-7xl mx-auto">
@@ -133,8 +139,8 @@ function TicketsAnalysis() {
                                 <span className="text-blue-600 text-sm">{ticket.assigned_to.displayName}</span>
                             </div>
                             <div 
-                                className="text-blue-600 mb-2 line-clamp-2 prose prose-sm max-w-none"
-                                dangerouslySetInnerHTML={{ __html: ticket.description }}
+                                className="prose prose-sm max-w-none mb-2 line-clamp-2 [&>*]:text-gray-600 [&>*]:!font-normal [&_strong]:!text-gray-700 [&_strong]:!font-medium"
+                                dangerouslySetInnerHTML={{ __html: cleanHtmlContent(ticket.description) }}
                             />
                             <div className="flex flex-wrap gap-2">
                                 <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
@@ -150,9 +156,9 @@ function TicketsAnalysis() {
 
                 {selectedTicket && (
                     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4">
-                        <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
-                            <div className="p-6">
-                                <div className="flex justify-between items-start mb-4">
+                        <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                            <div className="p-8">
+                                <div className="flex justify-between items-start mb-6">
                                     <div>
                                         <div className="flex items-center mb-2">
                                             <h2 className="text-2xl font-bold text-gray-900">{selectedTicket.title}</h2>
@@ -170,24 +176,24 @@ function TicketsAnalysis() {
                                     </button>
                                 </div>
 
-                                <div className="mb-6">
-                                    <h3 className="font-semibold text-gray-700 mb-2">Descripción:</h3>
+                                <div className="mb-8">
+                                    <h3 className="font-semibold text-gray-700 mb-3">Descripción:</h3>
                                     <div 
-                                        className="text-gray-600 prose prose-blue max-w-none"
-                                        dangerouslySetInnerHTML={{ __html: selectedTicket.description }}
+                                        className="prose prose-blue max-w-none bg-gray-50 p-4 rounded-lg [&>*]:text-gray-600 [&>*]:!font-normal [&_strong]:!text-gray-700 [&_strong]:!font-medium"
+                                        dangerouslySetInnerHTML={{ __html: cleanHtmlContent(selectedTicket.description) }}
                                     />
                                 </div>
 
-                                <div className="mb-6">
-                                    <h3 className="font-semibold text-gray-700 mb-2">Criterios de Aceptación Actuales:</h3>
+                                <div className="mb-8">
+                                    <h3 className="font-semibold text-gray-700 mb-3">Criterios de Aceptación Actuales:</h3>
                                     <div 
-                                        className="text-gray-600 prose prose-blue max-w-none"
-                                        dangerouslySetInnerHTML={{ __html: selectedTicket.acceptance_criteria }}
+                                        className="prose prose-blue max-w-none bg-gray-50 p-4 rounded-lg [&>*]:text-gray-600 [&>*]:!font-normal [&_strong]:!text-gray-700 [&_strong]:!font-medium"
+                                        dangerouslySetInnerHTML={{ __html: cleanHtmlContent(selectedTicket.acceptance_criteria) }}
                                     />
                                 </div>
 
-                                <div className="mb-6">
-                                    <h3 className="font-semibold text-gray-700 mb-2">Cargar Imagen:</h3>
+                                <div className="mb-8">
+                                    <h3 className="font-semibold text-gray-700 mb-3">Cargar Imagen:</h3>
                                     <label className="flex items-center justify-center w-full h-32 px-4 transition bg-white border-2 border-gray-300 border-dashed rounded-md appearance-none cursor-pointer hover:border-blue-500 focus:outline-none">
                                         <div className="flex flex-col items-center space-y-2">
                                             <Upload className="w-6 h-6 text-gray-400" />
@@ -207,7 +213,7 @@ function TicketsAnalysis() {
                                 <button
                                     onClick={handleAnalyze}
                                     disabled={analyzing}
-                                    className="w-full mb-6 bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 flex items-center justify-center"
+                                    className="w-full mb-8 bg-blue-600 text-white py-3 px-4 rounded-lg hover:bg-blue-700 transition-colors disabled:bg-blue-300 flex items-center justify-center"
                                 >
                                     {analyzing ? (
                                         <>
@@ -220,36 +226,52 @@ function TicketsAnalysis() {
                                 </button>
 
                                 {aiAnalysis && (
-                                    <div className="mb-6">
-                                        <div className="flex items-center justify-between mb-2">
-                                            <h3 className="font-semibold text-gray-700">Criterios de Aceptación Sugeridos:</h3>
-                                            <button
-                                                onClick={handleCopy}
-                                                className="text-blue-600 hover:text-blue-800 flex items-center"
-                                            >
-                                                {copied ? (
-                                                    <Check className="w-5 h-5 mr-1" />
-                                                ) : (
-                                                    <Copy className="w-5 h-5 mr-1" />
-                                                )}
-                                                {copied ? 'Copiado!' : 'Copiar'}
-                                            </button>
+                                    <div className="mb-8">
+                                        <div className="mb-6">
+                                            <div className="flex items-center justify-between mb-3">
+                                                <h3 className="font-semibold text-gray-700">Criterios de Aceptación Sugeridos:</h3>
+                                                <button
+                                                    onClick={handleCopy}
+                                                    className="text-blue-600 hover:text-blue-800 flex items-center"
+                                                >
+                                                    {copied ? (
+                                                        <Check className="w-5 h-5 mr-1" />
+                                                    ) : (
+                                                        <Copy className="w-5 h-5 mr-1" />
+                                                    )}
+                                                    {copied ? 'Copiado!' : 'Copiar'}
+                                                </button>
+                                            </div>
+                                            <ul className="list-disc pl-5 space-y-2 bg-gray-50 p-4 rounded-lg">
+                                                {aiAnalysis.suggestedCriteria.map((criteria, index) => (
+                                                    <li key={index} className="text-gray-600">{criteria}</li>
+                                                ))}
+                                            </ul>
                                         </div>
-                                        <ul className="list-disc pl-5 space-y-2">
-                                            {aiAnalysis.suggestedCriteria.map((criteria, index) => (
-                                                <li key={index} className="text-gray-600">{criteria}</li>
-                                            ))}
-                                        </ul>
+
+                                        {aiAnalysis.generalSuggestions && aiAnalysis.generalSuggestions.length > 0 && (
+                                            <div className="mt-6">
+                                                <h3 className="font-semibold text-gray-700 mb-3">Sugerencias Generales:</h3>
+                                                <ul className="list-disc pl-5 space-y-2 bg-gray-50 p-4 rounded-lg">
+                                                    {aiAnalysis.generalSuggestions.map((suggestion, index) => (
+                                                        <li key={index} className="text-gray-600">{suggestion}</li>
+                                                    ))}
+                                                </ul>
+                                            </div>
+                                        )}
+
                                         {aiAnalysis.imageAnalysis && (
-                                            <div className="mt-4">
-                                                <h3 className="font-semibold text-gray-700 mb-2">Análisis de Imagen:</h3>
-                                                <p className="text-gray-600">{aiAnalysis.imageAnalysis}</p>
+                                            <div className="mt-6">
+                                                <h3 className="font-semibold text-gray-700 mb-3">Análisis de Imagen:</h3>
+                                                <div className="bg-gray-50 p-4 rounded-lg">
+                                                    <p className="text-gray-600">{aiAnalysis.imageAnalysis}</p>
+                                                </div>
                                             </div>
                                         )}
                                     </div>
                                 )}
 
-                                <div className="flex flex-wrap gap-2 mb-4">
+                                <div className="flex flex-wrap gap-2">
                                     <span className="inline-block px-3 py-1 bg-blue-100 text-blue-800 rounded-full text-sm">
                                         Estado: {selectedTicket.state}
                                     </span>

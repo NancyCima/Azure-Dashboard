@@ -1,8 +1,10 @@
-fastapi
-uvicorn
-requests
-python-dotenv
-pydantic==2.6.3
 beautifulsoup4
+fastapi
+langdetect
 openai
+pillow
+pydantic==2.6.3
+python-dotenv
 python-multipart
+requests
+uvicorn

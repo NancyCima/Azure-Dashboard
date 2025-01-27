@@ -28,11 +28,21 @@ export interface UserStory {
 interface AIAnalysisResponse {
     analysis: string;
     suggestedCriteria: string[];
-    imageAnalysis?: string;
-    generalCriteria?: string[];
+    generalSuggestions: string[];
+    requiresRevision: boolean;
 }
 
 export const api = {
+    getUserStories: async (): Promise<UserStory[]> => {
+        try {
+            const response = await axios.get(`${API_BASE_URL}/userstories`);
+            return response.data;
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+            throw new Error(`Failed to fetch user stories: ${errorMessage}`);
+        }
+    },
+
     getTickets: async (): Promise<Ticket[]> => {
         try {
             const response = await axios.get(`${API_BASE_URL}/workitems`);
@@ -71,16 +81,6 @@ export const api = {
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             throw new Error(`Failed to analyze ticket: ${errorMessage}`);
-        }
-    },
-
-    getUserStories: async (): Promise<UserStory[]> => {
-        try {
-            const response = await axios.get(`${API_BASE_URL}/userstories`);
-            return response.data;
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            throw new Error(`Failed to fetch user stories: ${errorMessage}`);
         }
     },
 
