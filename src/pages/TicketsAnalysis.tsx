@@ -1,15 +1,16 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowLeft, X, Upload, Search, User, Loader2, Copy, Check } from 'lucide-react';
+import { ArrowLeft, X, Upload, Search, User, Loader2, Copy, Check, AlertCircle } from 'lucide-react';
 import { api, Ticket } from '../services/api';
 
 function TicketsAnalysis() {
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [modalError, setModalError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [selectedTicket, setSelectedTicket] = useState<Ticket | null>(null);
-    const [selectedImage, setSelectedImage] = useState<File | null>(null);
+    const [selectedImage, setSelectedImage] = useState<File | undefined>(undefined);
     const [analyzing, setAnalyzing] = useState(false);
     const [aiAnalysis, setAiAnalysis] = useState<{
         suggestedCriteria: string[];
@@ -40,7 +41,7 @@ function TicketsAnalysis() {
             ticket.id.toString().includes(searchTerm)
         );
     });
-
+    
     const handleImageUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
         if (file) {
@@ -53,13 +54,19 @@ function TicketsAnalysis() {
 
         setAnalyzing(true);
         setAiAnalysis(null);
-        setError(null);
+        setModalError(null);
 
         try {
+            // Validar que el ticket tenga contenido para analizar
+            if (!selectedTicket.description.trim() && !selectedTicket.acceptance_criteria.trim()) {
+                throw new Error('El ticket debe tener una descripción o criterios de aceptación para ser analizado');
+            }
+
             const analysis = await api.analyzeTicket(selectedTicket, selectedImage);
             setAiAnalysis(analysis);
         } catch (err) {
-            setError('Error al analizar el ticket');
+            const errorMessage = err instanceof Error ? err.message : 'Error al analizar el ticket';
+            setModalError(errorMessage);
         } finally {
             setAnalyzing(false);
         }
@@ -73,7 +80,7 @@ function TicketsAnalysis() {
             setCopied(true);
             setTimeout(() => setCopied(false), 2000);
         } catch (err) {
-            setError('Error al copiar al portapapeles');
+            setModalError('Error al copiar al portapapeles');
         }
     };
 
@@ -124,7 +131,8 @@ function TicketsAnalysis() {
                             onClick={() => {
                                 setSelectedTicket(ticket);
                                 setAiAnalysis(null);
-                                setSelectedImage(null);
+                                setModalError(null);
+                                setSelectedImage(undefined);
                             }}
                             className="bg-blue-50 p-6 rounded-lg shadow-md cursor-pointer transform transition-transform hover:scale-105"
                         >
@@ -209,6 +217,13 @@ function TicketsAnalysis() {
                                         />
                                     </label>
                                 </div>
+
+                                {modalError && (
+                                    <div className="mb-4 p-4 bg-red-50 rounded-lg flex items-start">
+                                        <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 mr-2 flex-shrink-0" />
+                                        <p className="text-red-700">{modalError}</p>
+                                    </div>
+                                )}
 
                                 <button
                                     onClick={handleAnalyze}

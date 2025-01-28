@@ -52,3 +52,6 @@ Thumbs.db
 *.mov
 *.wmv
 
+Lib
+Scripts
+__pycache__

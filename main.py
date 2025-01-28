@@ -82,7 +82,7 @@ def filter_work_items(data):
     """
     # Identificar las user stories con tag "US New"
     us_new_ids = {item['id'] for item in data 
-                  if item['work_item_type'] == 'User Story' and item.get('tags') == 'US New'}
+                if item['work_item_type'] == 'User Story' and item.get('tags') == 'US New'}
 
     # Filtrar los work items
     filtered_data = []
@@ -122,6 +122,15 @@ async def get_user_stories():
             item for item in data
             if item.get("work_item_type") == "User Story"
         ]
+
+        # Aplica el filtro general de `filter_work_items`
+        filtered_data = filter_work_items(data)
+
+        # Filtrar solo User Stories
+        user_stories = [
+            item for item in filtered_data
+            if item.get("work_item_type") == "User Story"
+        ]
         
         # Función para determinar si un campo está vacío
         def is_empty(value):
@@ -152,6 +161,46 @@ async def get_user_stories():
         ]
 
         return filtered_user_stories
+
+    except requests.exceptions.RequestException as e:
+        return {"error": str(e)}
+
+
+@app.get("/tickets")
+async def get_incomplete_tickets():
+    try:
+        url = f"{API_BASE_URL}/api/v1/workitems/work-items"
+        response = requests.get(url)
+        response.raise_for_status()
+
+        data = response.json()
+
+        # Aplica el filtro general de `filter_work_items`
+        filtered_data = filter_work_items(data)
+
+        # Filtrar tickets que no son User Stories
+        tickets = [
+            {
+                "id": item.get("id"),
+                "title": item.get("title"),
+                "state": item.get("state"),
+                "estimatedHours": (
+                    float(item.get("estimated_hours")) 
+                    if isinstance(item.get("estimated_hours"), (int, float)) 
+                    else item.get("estimated_hours", "No disponible")
+                ),
+                "completedHours": (
+                    float(item.get("completed_hours")) 
+                    if isinstance(item.get("completed_hours"), (int, float)) 
+                    else item.get("completed_hours", "No disponible")
+                ),
+                "description": item.get("description", "").strip(),
+            }
+            for item in filtered_data
+            if item.get("work_item_type") != "User Story"
+        ]
+
+        return tickets
 
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
@@ -250,9 +299,6 @@ async def mark_user_story_checked(work_item_id: int):
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-
-
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-

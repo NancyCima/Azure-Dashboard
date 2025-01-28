@@ -22,7 +22,16 @@ export interface UserStory {
     id: number;
     title: string;
     description: string;
-    acceptance_criteria: string;
+    acceptanceCriteria: string;
+}
+
+export interface IncompleteTicket {
+    id: number;
+    title: string;
+    state: string;
+    description: string;
+    estimatedHours: number | string; // Puede ser un número o "No disponible"
+    completedHours: number | string; // Puede ser un número o "No disponible"
 }
 
 interface AIAnalysisResponse {
@@ -41,6 +50,11 @@ export const api = {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             throw new Error(`Failed to fetch user stories: ${errorMessage}`);
         }
+    },
+
+    getIncompleteTickets: async (): Promise<IncompleteTicket[]> => {
+        const response = await axios.get(`${API_BASE_URL}/tickets`);
+        return Array.isArray(response.data) ? response.data : [];
     },
 
     getTickets: async (): Promise<Ticket[]> => {
@@ -79,8 +93,12 @@ export const api = {
 
             return response.data.criteria;
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
-            throw new Error(`Failed to analyze ticket: ${errorMessage}`);
+            if (axios.isAxiosError(error) && error.response) {
+                // Si el error viene del backend con un mensaje específico
+                throw new Error(error.response.data.detail || 'Error al analizar el ticket');
+            }
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            throw new Error(`Error al analizar el ticket: ${errorMessage}`);
         }
     },
 
@@ -126,4 +144,6 @@ export const api = {
             throw new Error(`Failed to mark ticket as checked: ${errorMessage}`);
         }
     }
+
 };
+

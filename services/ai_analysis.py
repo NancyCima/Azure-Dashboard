@@ -7,6 +7,8 @@ from langdetect import detect
 import io
 from PIL import Image
 import base64
+import json
+import os
 
 client = OpenAI()
 
@@ -38,7 +40,11 @@ def process_image(image_content: bytes) -> str:
 def load_general_criteria():
     """Load general criteria from JSON file"""
     try:
-        with open("data\general_criteria.json", "r", encoding="utf-8") as f:
+        # Get the directory where this script is located
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        file_path = os.path.join(current_dir, 'general_criteria.json')
+        
+        with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
         print(f"Error loading general criteria: {e}")
@@ -140,6 +146,16 @@ def parse_analysis_response(analysis: str, language: str) -> Dict:
 def analyze_ticket(ticket_data: Dict, images: List[Dict] = None, general_criteria: Dict = None) -> Dict:
     """Analyze ticket using GPT-4"""
     try:
+        # Validar que el ticket tenga contenido para analizar
+        description = ticket_data.get('description', '').strip()
+        acceptance_criteria = ticket_data.get('acceptance_criteria', '').strip()
+        
+        if not description and not acceptance_criteria:
+            raise HTTPException(
+                status_code=400,
+                detail="El ticket no tiene descripción ni criterios de aceptación para analizar"
+            )
+
         base_prompt, language = prepare_analysis_prompt(ticket_data, general_criteria)
 
         messages = [
@@ -197,6 +213,8 @@ def analyze_ticket(ticket_data: Dict, images: List[Dict] = None, general_criteri
                 detail=f"Solicitud incorrecta a la API de OpenAI: {str(e)}" if language == 'es' else f"Bad request to OpenAI API: {str(e)}"
             )
 
+    except HTTPException as e:
+        raise e
     except Exception as e:
         raise HTTPException(
             status_code=500,
