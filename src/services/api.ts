@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:8000';
+const BACK_URL = import.meta.env.VITE_BACK_URL;
 
 interface AssignedTo {
     displayName: string;
@@ -44,7 +44,7 @@ interface AIAnalysisResponse {
 export const api = {
     getUserStories: async (): Promise<UserStory[]> => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/userstories`);
+            const response = await axios.get(`${BACK_URL}/userstories`);
             return response.data;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -53,13 +53,13 @@ export const api = {
     },
 
     getIncompleteTickets: async (): Promise<IncompleteTicket[]> => {
-        const response = await axios.get(`${API_BASE_URL}/tickets`);
+        const response = await axios.get(`${BACK_URL}/tickets`);
         return Array.isArray(response.data) ? response.data : [];
     },
 
     getTickets: async (): Promise<Ticket[]> => {
         try {
-            const response = await axios.get(`${API_BASE_URL}/workitems`);
+            const response = await axios.get(`${BACK_URL}/workitems`);
             return response.data;
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -85,7 +85,7 @@ export const api = {
                 formData.append('files', image);
             }
 
-            const response = await axios.post(`${API_BASE_URL}/analyze-ticket`, formData, {
+            const response = await axios.post(`${BACK_URL}/analyze-ticket`, formData, {
                 headers: {
                     'Content-Type': 'multipart/form-data',
                 },
@@ -120,7 +120,7 @@ export const api = {
             }
 
             const response = await axios.post(
-                `${API_BASE_URL}/upload-images/${workItemId}`, 
+                `${BACK_URL}/upload-images/${workItemId}`, 
                 formData, 
                 {
                     headers: {
@@ -138,7 +138,7 @@ export const api = {
 
     markTicketChecked: async (workItemId: number): Promise<void> => {
         try {
-            await axios.post(`${API_BASE_URL}/mark-user-story-checked/${workItemId}`);
+            await axios.post(`${BACK_URL}/mark-user-story-checked/${workItemId}`);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
             throw new Error(`Failed to mark ticket as checked: ${errorMessage}`);

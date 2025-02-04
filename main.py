@@ -24,7 +24,7 @@ app.add_middleware(
 )
 
 # API URLs
-API_BASE_URL = "http://localhost:8080"  # Azure DevOps API
+API_BASE_URL = os.getenv("API_BASE_URL") # Azure DevOps API
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
 
 # Validate OpenAI API key
