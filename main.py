@@ -243,7 +243,11 @@ async def analyze_ticket_endpoint(
     """Endpoint para analizar un ticket usando IA. 
     Sugiere criterios de aceptación y mejoras para el ticket, con opcion de adjuntar imagenes y link a Figma"""
     try:
+        # Validate ticket data early
         ticket_data = json.loads(ticket)
+        if not ticket_data.get('description') and not ticket_data.get('acceptance_criteria'):
+            raise HTTPException(status_code=400, detail="Ticket requires description or acceptance criteria")
+
         general_criteria = load_general_criteria()
         
         # Process images if provided

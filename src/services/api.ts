@@ -82,22 +82,18 @@ export const api = {
             }));
             
             if (image) {
-                formData.append('files', image);
+                formData.append('image', image);
             }
-
+    
             const response = await axios.post(`${BACK_URL}/analyze-ticket`, formData, {
-                headers: {
-                    'Content-Type': 'multipart/form-data',
-                },
+                headers: { 'Content-Type': 'multipart/form-data' }
             });
-
-            return response.data.criteria;
+    
+            return response.data;
         } catch (error) {
-            if (axios.isAxiosError(error) && error.response) {
-                // Si el error viene del backend con un mensaje específico
-                throw new Error(error.response.data.detail || 'Error al analizar el ticket');
-            }
-            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
+            const errorMessage = error instanceof Error 
+                ? error.message 
+                : 'Error al analizar el ticket';
             throw new Error(`Error al analizar el ticket: ${errorMessage}`);
         }
     },

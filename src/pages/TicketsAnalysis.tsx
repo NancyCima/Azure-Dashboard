@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Search, User, Loader2, Copy, Check, AlertCircle, Upload, X } from 'lucide-react';
 import { useTickets } from '../context/TicketsContext';
 import { api, Ticket } from '../services/api';
 import Header from '../components/Header';
 
 function TicketsAnalysis() {
+    const { tickets: contextTickets, loading: contextLoading, error: contextError } = useTickets();
     const [tickets, setTickets] = useState<Ticket[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -21,21 +22,16 @@ function TicketsAnalysis() {
     const [copied, setCopied] = useState(false);
 
     useEffect(() => {
-        const fetchTickets = async () => {
-            try {
-                const data = await api.getTickets();
-                setTickets(data);
-                setLoading(false);
-            } catch (err) {
-                setError('Error al cargar los tickets');
-                setLoading(false);
-            }
-        };
+        if (Array.isArray(contextTickets)) {
+            setTickets(contextTickets);
+        } else {
+            setTickets([]);
+        }
+        setLoading(contextLoading);
+        setError(contextError);
+    }, [contextTickets, contextLoading, contextError]);
 
-        fetchTickets();
-    }, []);
-
-    const filteredTickets = tickets.filter(ticket => {
+    const filteredTickets = (tickets || []).filter(ticket => {
         const searchTermLower = searchTerm.toLowerCase();
         return (
             ticket.title.toLowerCase().includes(searchTermLower) || 

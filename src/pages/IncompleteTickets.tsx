@@ -6,10 +6,10 @@ import Header from '../components/Header';
 import * as XLSX from 'xlsx';
 
 function IncompleteTickets() {
-    const { userStories, incompleteTickets, loading, error } = useTickets();
+    const { userStories: contextUserStories, incompleteTickets: contextIncompleteTickets, loading, error } = useTickets();
     const [selectedTab, setSelectedTab] = useState<'userStories' | 'otherTickets'>('userStories');
-    const [filteredStories, setFilteredStories] = useState<UserStory[]>(userStories);
-    const [filteredTickets, setFilteredTickets] = useState<IncompleteTicket[]>(incompleteTickets);
+    const [filteredStories, setFilteredStories] = useState<UserStory[]>([]);
+    const [filteredTickets, setFilteredTickets] = useState<IncompleteTicket[]>([]);
 
     // Filtros para User Stories
     const [showWithoutDescription, setShowWithoutDescription] = useState(false);
@@ -24,15 +24,26 @@ function IncompleteTickets() {
     const [showWithoutEstimatedHours, setShowWithoutEstimatedHours] = useState(false);
     const [showWithoutCompletedHours, setShowWithoutCompletedHours] = useState(false);
 
-    // Actualizar los estados filtrados cuando cambien los datos del contexto
+    // Inicializar los estados filtrados cuando cambien los datos del contexto
     useEffect(() => {
-        setFilteredStories(userStories);
-        setFilteredTickets(incompleteTickets);
-    }, [userStories, incompleteTickets]);
+        if (Array.isArray(contextUserStories)) {
+            setFilteredStories(contextUserStories);
+        } else {
+            setFilteredStories([]);
+        }
+        
+        if (Array.isArray(contextIncompleteTickets)) {
+            setFilteredTickets(contextIncompleteTickets);
+        } else {
+            setFilteredTickets([]);
+        }
+    }, [contextUserStories, contextIncompleteTickets]);
 
     // Filtrar User Stories
     useEffect(() => {
-        let filtered = userStories;
+        if (!Array.isArray(contextUserStories)) return;
+        
+        let filtered = [...contextUserStories];
 
         if (showWithoutDescription) {
             filtered = filtered.filter((story) => !story.description);
@@ -53,12 +64,14 @@ function IncompleteTickets() {
         showWithoutAcceptanceCriteria,
         showWithDescription,
         showWithAcceptanceCriteria,
-        userStories,
+        contextUserStories,
     ]);
 
     // Filtrar Otros Tickets
     useEffect(() => {
-        let filtered = tickets;
+        if (!Array.isArray(contextIncompleteTickets)) return;
+        
+        let filtered = [...contextIncompleteTickets];
 
         if (ticketState) {
             filtered = filtered.filter((ticket) => ticket.state === ticketState);
@@ -78,7 +91,7 @@ function IncompleteTickets() {
                 const estimatedHours =
                     typeof ticket.estimatedHours === "number"
                         ? ticket.estimatedHours
-                        : parseFloat(ticket.estimatedHours);
+                        : parseFloat(ticket.estimatedHours as string);
                 return isNaN(estimatedHours) || estimatedHours <= 0;
             });
         }
@@ -87,7 +100,7 @@ function IncompleteTickets() {
                 const completedHours =
                     typeof ticket.completedHours === "number"
                         ? ticket.completedHours
-                        : parseFloat(ticket.completedHours);
+                        : parseFloat(ticket.completedHours as string);
                 return isNaN(completedHours) || completedHours <= 0;
             });
         }
@@ -98,9 +111,8 @@ function IncompleteTickets() {
         showWithoutDescriptionTickets,
         showWithoutEstimatedHours,
         showWithoutCompletedHours,
-        incompleteTickets,
+        contextIncompleteTickets,
     ]);
-
 
     const CompletionIndicator = ({ isComplete }: { isComplete: boolean }) => {
         return isComplete ? (
@@ -319,7 +331,7 @@ function IncompleteTickets() {
                             <div className="mb-4 relative">
                                 <button
                                     className="flex items-center text-blue-600 hover:text-blue-800"
-                                    onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)} // Cambiar el estado del menú
+                                    onClick={() => setIsFilterMenuOpen(!isFilterMenuOpen)}
                                 >
                                     <Filter className="w-6 h-6 mr-2" />
                                     Filtros
@@ -403,19 +415,16 @@ function IncompleteTickets() {
                                                 <td className="px-6 py-4 text-gray-700">{ticket.title}</td>
                                                 <td className="px-6 py-4 text-gray-700">{ticket.state}</td>
                                                 <td className="px-6 py-4">
-                                                    {/* Evaluar estimatedHours */}
                                                     <CompletionIndicator 
                                                         isComplete={typeof ticket.estimatedHours === "number" && ticket.estimatedHours > 0} 
                                                     />
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    {/* Evaluar completedHours */}
                                                     <CompletionIndicator 
                                                         isComplete={typeof ticket.completedHours === "number" && ticket.completedHours > 0} 
                                                     />
                                                 </td>
                                                 <td className="px-6 py-4">
-                                                    {/* Evaluar descripción */}
                                                     <CompletionIndicator 
                                                         isComplete={ticket.description.trim() !== "" && ticket.description.trim() !== "No disponible"} 
                                                     />

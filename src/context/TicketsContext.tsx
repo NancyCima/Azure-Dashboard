@@ -7,6 +7,7 @@ interface TicketsContextType {
   incompleteTickets: IncompleteTicket[];
   loading: boolean;
   error: string | null;
+  refreshData: () => Promise<void>;
 }
 
 const TicketsContext = createContext<TicketsContextType | undefined>(undefined);
@@ -18,30 +19,39 @@ export function TicketsProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const fetchData = async () => {
+    try {
+      setLoading(true);
+      const [ticketsData, userStoriesData, incompleteTicketsData] = await Promise.all([
+        api.getTickets(),
+        api.getUserStories(),
+        api.getIncompleteTickets(),
+      ]);
+
+      setTickets(ticketsData);
+      setUserStories(userStoriesData);
+      setIncompleteTickets(incompleteTicketsData);
+      setError(null);
+    } catch (err) {
+      setError('Error al cargar los datos');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   useEffect(() => {
-    const fetchData = async () => {
-      try {
-        const [ticketsData, userStoriesData, incompleteTicketsData] = await Promise.all([
-          api.getTickets(),
-          api.getUserStories(),
-          api.getIncompleteTickets(),
-        ]);
-
-        setTickets(ticketsData);
-        setUserStories(userStoriesData);
-        setIncompleteTickets(incompleteTicketsData);
-        setLoading(false);
-      } catch (err) {
-        setError('Error al cargar los datos');
-        setLoading(false);
-      }
-    };
-
     fetchData();
   }, []);
 
   return (
-    <TicketsContext.Provider value={{ tickets, userStories, incompleteTickets, loading, error }}>
+    <TicketsContext.Provider value={{ 
+      tickets, 
+      userStories, 
+      incompleteTickets, 
+      loading, 
+      error,
+      refreshData: fetchData 
+    }}>
       {children}
     </TicketsContext.Provider>
   );
