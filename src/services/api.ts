@@ -16,6 +16,7 @@ export interface Ticket {
     description: string;
     acceptance_criteria: string;
     image_url?: string;
+    url: string;
 }
 
 export interface UserStory {
@@ -23,6 +24,7 @@ export interface UserStory {
     title: string;
     description: string;
     acceptanceCriteria: string;
+    url: string;
 }
 
 export interface IncompleteTicket {
@@ -32,6 +34,7 @@ export interface IncompleteTicket {
     description: string;
     estimatedHours: number | string; // Puede ser un número o "No disponible"
     completedHours: number | string; // Puede ser un número o "No disponible"
+    url: string;
 }
 
 interface AIAnalysisResponse {
@@ -82,18 +85,22 @@ export const api = {
             }));
             
             if (image) {
-                formData.append('image', image);
+                formData.append('files', image);
             }
-    
+
             const response = await axios.post(`${BACK_URL}/analyze-ticket`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
+                headers: {
+                    'Content-Type': 'multipart/form-data',
+                },
             });
-    
-            return response.data;
+
+            return response.data.criteria;
         } catch (error) {
-            const errorMessage = error instanceof Error 
-                ? error.message 
-                : 'Error al analizar el ticket';
+            if (axios.isAxiosError(error) && error.response) {
+                // Si el error viene del backend con un mensaje específico
+                throw new Error(error.response.data.detail || 'Error al analizar el ticket');
+            }
+            const errorMessage = error instanceof Error ? error.message : 'Error desconocido';
             throw new Error(`Error al analizar el ticket: ${errorMessage}`);
         }
     },

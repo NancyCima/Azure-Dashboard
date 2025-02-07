@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Filter, Check, X, Download } from 'lucide-react';
+import { Filter, Check, X, Download,  ExternalLink } from 'lucide-react';
 import { UserStory, IncompleteTicket } from '../services/api';
 import { useTickets } from '../context/TicketsContext';
 import Header from '../components/Header';
@@ -23,6 +23,23 @@ function IncompleteTickets() {
     const [showWithoutDescriptionTickets, setShowWithoutDescriptionTickets] = useState(false);
     const [showWithoutEstimatedHours, setShowWithoutEstimatedHours] = useState(false);
     const [showWithoutCompletedHours, setShowWithoutCompletedHours] = useState(false);
+
+    const WorkItemLink = ({ url }: { url: string }) => (
+        <a
+            href={url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center text-blue-600 hover:text-blue-800"
+            onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }}
+        >
+            <ExternalLink className="w-4 h-4 ml-2" />
+        </a>
+    );
+
 
     // Inicializar los estados filtrados cuando cambien los datos del contexto
     useEffect(() => {
@@ -306,7 +323,10 @@ function IncompleteTickets() {
                                             {filteredStories.map((story) => (
                                                 <tr key={story.id} className="hover:bg-blue-50 transition-colors">
                                                     <td className="px-6 py-4 font-medium text-blue-800">
-                                                        #{story.id}
+                                                        <div className="flex items-center">
+                                                            #{story.id}
+                                                            <WorkItemLink url={story.url} />
+                                                        </div>
                                                     </td>
                                                     <td className="px-6 py-4 text-gray-700">{story.title}</td>
                                                     <td className="px-6 py-4">
@@ -411,7 +431,12 @@ function IncompleteTickets() {
                                     <tbody className="divide-y divide-gray-200">
                                         {filteredTickets.map((ticket) => (
                                             <tr key={ticket.id} className="hover:bg-blue-50 transition-colors">
-                                                <td className="px-6 py-4 font-medium text-blue-800">#{ticket.id}</td>
+                                                <td className="px-6 py-4 font-medium text-blue-800">
+                                                    <div className="flex items-center">
+                                                        #{ticket.id}
+                                                        <WorkItemLink url={ticket.url} />
+                                                    </div>
+                                                </td>
                                                 <td className="px-6 py-4 text-gray-700">{ticket.title}</td>
                                                 <td className="px-6 py-4 text-gray-700">{ticket.state}</td>
                                                 <td className="px-6 py-4">

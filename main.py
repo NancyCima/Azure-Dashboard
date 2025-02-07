@@ -152,8 +152,6 @@ async def get_user_stories():
             story['description'] = clean_html_content(original_description)
             story['acceptance_criteria'] = clean_html_content(original_criteria)
 
-
-
         # Filtrar User Stories incompletas
         filtered_user_stories = [
             story for story in user_stories
@@ -195,6 +193,7 @@ async def get_incomplete_tickets():
                     else item.get("completed_hours", "No disponible")
                 ),
                 "description": item.get("description", "").strip(),
+                "work_item_url": item.get("work_item_url")
             }
             for item in filtered_data
             if item.get("work_item_type") != "User Story"
