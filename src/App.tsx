@@ -1,23 +1,53 @@
 import { BrowserRouter as Router, Routes, Route} from 'react-router-dom';
-import { TicketsProvider } from './context/TicketsContext';
+import { AuthProvider } from './contexts/AuthContext';
+import { ProtectedRoute } from './components/ProtectedRoute';
 import IncompleteTickets from './pages/IncompleteTickets';
 import TicketsAnalysis from './pages/TicketsAnalysis';
 import Dashboard from './pages/Dashboard';
 import Home from './pages/Home';
+import Login from './pages/Login';
+import { TicketsProvider } from './contexts/TicketsContext';
+
 
 function App() {
     return (
-        <TicketsProvider>
-            <Router>
-                <Routes>
-                    <Route path="/" element={<Home />} />
-                    <Route path="/home" element={<Home />}  />
-                    <Route path="/tickets-incompletos" element={<IncompleteTickets />} />
-                    <Route path="/analisis-tickets" element={<TicketsAnalysis />} />
-                    <Route path="/dashboard" element={<Dashboard />} />
-                </Routes>
-            </Router>
-        </TicketsProvider>
+        <AuthProvider>
+            <TicketsProvider>
+                <Router>
+                    <Routes>
+                        <Route path="/login" element={<Login/>}/>
+                        <Route path="/" 
+                                element={
+                                    <ProtectedRoute>
+                                        <Home />
+                                    </ProtectedRoute>
+                                }
+                            />
+                        <Route path="/tickets-incompletos" 
+                                element={   
+                                    <ProtectedRoute>
+                                        <IncompleteTickets/>
+                                    </ProtectedRoute>
+                                }
+                            />
+                        <Route path="/analisis-tickets" 
+                                element={
+                                    <ProtectedRoute>
+                                        <TicketsAnalysis />
+                                    </ProtectedRoute>
+                                } 
+                            />
+                        <Route path="/dashboard" 
+                                element={ 
+                                    <ProtectedRoute>
+                                        <Dashboard />
+                                    </ProtectedRoute>
+                                } 
+                            />
+                    </Routes>
+                </Router>
+            </TicketsProvider>
+        </AuthProvider>
     );
 }
 

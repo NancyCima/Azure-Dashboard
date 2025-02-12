@@ -1,5 +1,6 @@
-from fastapi import FastAPI, File, UploadFile, Form, HTTPException
+from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.security import OAuth2PasswordRequestForm
 import requests
 import re
 from typing import Optional, List, Dict
@@ -9,6 +10,9 @@ import os
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from services.ai_analysis import analyze_ticket, process_image, load_general_criteria
+import bcrypt
+import mysql.connector
+
 
 load_dotenv()
 
@@ -23,9 +27,34 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# API URLs
-API_BASE_URL = os.getenv("API_BASE_URL") # Azure DevOps API
+# API URLs y configuración
+API_BASE_URL = os.getenv("API_BASE_URL")  # API de Azure DevOps
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Obtener los valores de las variables de entorno
+DB_HOST = os.getenv("DB_HOST")
+DB_USER = os.getenv("DB_USER")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+DB_NAME = os.getenv("DB_NAME")
+
+# Conectar a la base de datos
+def get_db_connection():
+    return mysql.connector.connect(
+        host=DB_HOST,
+        user=DB_USER,
+        password=DB_PASSWORD,
+        database=DB_NAME
+    )
+
+# Obtener el hash de la contraseña del usuario
+def get_user_password_hash(username: str):
+        conn = get_db_connection()
+        cursor = conn.cursor()
+        cursor.execute("SELECT password_hash FROM users WHERE username = %s", (username,))
+        result = cursor.fetchone()
+        cursor.close()
+        conn.close()
+        return result[0] if result else None
 
 # Validate OpenAI API key
 if not OPENAI_API_KEY:
@@ -44,25 +73,22 @@ def clean_html_content(html_content: str) -> str:
     # Usar BeautifulSoup para parsear el HTML
     soup = BeautifulSoup(html_content, 'html.parser')
     
-    # Remover todos los atributos de estilo y clases
+    # Remover atributos (excepto 'href' en enlaces)
     for tag in soup.find_all(True):
-        # Conservar solo los atributos necesarios
         allowed_attrs = ['href'] if tag.name == 'a' else []
-        # Crear una lista de atributos a eliminar
         attrs_to_remove = [attr for attr in tag.attrs if attr not in allowed_attrs]
-        # Eliminar los atributos
         for attr in attrs_to_remove:
             del tag[attr]
 
-    # Reemplazar <br> con saltos de línea
+    # Convertir <br> en saltos de línea
     for br in soup.find_all(['br']):
         br.replace_with('\n' + br.text)
 
-    # Convertir divs a párrafos para mejor semántica
+    # Convertir <div> en <p>
     for div in soup.find_all('div'):
         div.name = 'p'
 
-    # Asegurar que las listas estén bien formateadas
+    # Asegurar formato adecuado en listas
     for ul in soup.find_all('ul'):
         # Remover espacios en blanco excesivos en items de lista
         for li in ul.find_all('li'):
@@ -73,7 +99,7 @@ def clean_html_content(html_content: str) -> str:
     html = re.sub(r'\n\s*\n', '\n', html)
     
     return html
-    
+
 def filter_work_items(data):
     """
     Filtra los work items según las reglas definidas.
@@ -102,6 +128,20 @@ def filter_work_items(data):
 @app.get("/")
 async def root():
     return {"message": "Bienvenido a la API de la nueva aplicación"}
+
+@app.post("/login")
+def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    # Verifica si el usuario existe
+    stored_password_hash = get_user_password_hash(form_data.username)
+
+    if not stored_password_hash:
+        raise HTTPException(status_code=401, detail="Usuario no encontrado")
+
+    # Compara la contraseña ingresada con el hash almacenado
+    if bcrypt.checkpw(form_data.password.encode(), stored_password_hash.encode()):
+        return {"message": "Inicio de sesión exitoso"}
+    else:
+        raise HTTPException(status_code=401, detail="Contraseña incorrecta")
 
 @app.get("/userstories")
 async def get_user_stories():
@@ -152,6 +192,8 @@ async def get_user_stories():
             story['description'] = clean_html_content(original_description)
             story['acceptance_criteria'] = clean_html_content(original_criteria)
 
+
+
         # Filtrar User Stories incompletas
         filtered_user_stories = [
             story for story in user_stories
@@ -162,7 +204,6 @@ async def get_user_stories():
 
     except requests.exceptions.RequestException as e:
         return {"error": str(e)}
-
 
 @app.get("/tickets")
 async def get_incomplete_tickets():
@@ -239,17 +280,18 @@ async def analyze_ticket_endpoint(
     files: List[UploadFile] = File(None),
     figma_link: Optional[str] = Form(None)
 ):
-    """Endpoint para analizar un ticket usando IA. 
-    Sugiere criterios de aceptación y mejoras para el ticket, con opcion de adjuntar imagenes y link a Figma"""
+    """
+    Endpoint para analizar un ticket usando IA. Se pueden adjuntar imágenes y un link de Figma.
+    """
     try:
-        # Validate ticket data early
+        # Convertir el string JSON a diccionario
         ticket_data = json.loads(ticket)
         if not ticket_data.get('description') and not ticket_data.get('acceptance_criteria'):
             raise HTTPException(status_code=400, detail="Ticket requires description or acceptance criteria")
 
         general_criteria = load_general_criteria()
         
-        # Process images if provided
+        # Procesar las imágenes si fueron provistas
         images = []
         if files:
             for file in files:
@@ -261,41 +303,32 @@ async def analyze_ticket_endpoint(
                         "base64": base64_img
                     })
 
-        # Add Figma link to context if provided
+        # Agregar el link de Figma si fue proporcionado
         if figma_link:
             ticket_data["figma_link"] = figma_link
 
-        # Perform analysis
+        # Analizar el ticket utilizando la función externa
         analysis_result = analyze_ticket(
             ticket_data=ticket_data,
             images=images,
             general_criteria=general_criteria
         )
 
-        return {
-            "status": "success",
-            "criteria": analysis_result
-        }
+        return {"status": "success", "criteria": analysis_result}
 
     except json.JSONDecodeError:
-        raise HTTPException(
-            status_code=400,
-            detail="Invalid ticket data format"
-        )
+        raise HTTPException(status_code=400, detail="Invalid ticket data format")
     except Exception as e:
-        raise HTTPException(
-            status_code=500,
-            detail=str(e)
-        )
+        raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/mark-user-story-checked/{work_item_id}")
 async def mark_user_story_checked(work_item_id: int):
-    """Mark a user story as checked by adding the 'US Checked' tag"""
+    """
+    Marca una User Story como revisada agregándole el tag 'US Checked'.
+    """
     try:
         url = f"{API_BASE_URL}/api/v1/workitems/{work_item_id}/update-tags"
-        payload = {
-            "tags": ["US Checked"]
-        }
+        payload = {"tags": ["US Checked"]}
         response = requests.post(url, json=payload)
         response.raise_for_status()
         return {"status": "success", "message": "User story marked as checked"}
@@ -305,3 +338,5 @@ async def mark_user_story_checked(work_item_id: int):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+

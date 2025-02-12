@@ -1,10 +1,12 @@
 import { Link } from 'react-router-dom';
 import { Ticket, LineChart, LayoutDashboard } from 'lucide-react';
+import Navbar from '../components/Navbar';
 import Header from '../components/Header';
 
 function Home() {
     return (
         <div className="min-h-screen bg-white">
+        <Navbar/>
         <Header />
         {/* Main Container */}
         <div className="max-w-7xl mx-auto px-4 py-12">

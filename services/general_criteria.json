@@ -1,64 +1,141 @@
 {
   "criteria": [
     {
-      "category": "Campos a completar",
+      "category": "Validación de Campos",
       "rules": [
-        "Se debe validar los campos obligatorios y mostrar una marca para distinguirlos.",
-        "Tooltip con las características del campo.",
-        "Mensaje de error.",
-        "Validación de correo electrónico: formato que contenga @ y .com o .edu, que no esté repetido en la base. Mensajes de error claros.",
-        "Validación de DNI (máximo 8 caracteres), CUIT (máximo 11 caracteres), etc. Placeholder con formatos admitidos.",
-        "Validación de reglas de contraseñas: mínimo 8 caracteres, 1 mayúscula, 1 minúscula, 1 carácter especial y 1 número.",
-        "Mostrar reglas de contraseñas a ser validadas.",
-        "Desplazamiento entre campos con la tecla TAB."
+        "Los campos obligatorios deben estar marcados con un asterisco (*) o un distintivo visual.",
+        "Validación en tiempo real: mostrar errores mientras el usuario escribe.",
+        "Validación asincrónica para carga de archivos y procesos específicos.",
+        "Mensajes de error claros y específicos, evitando tecnicismos.",
+        "Deshabilitar el botón de envío si hay errores en el formulario.",
+        "Mostrar tooltips explicativos sobre los campos.",
+        "Validar que los valores de fecha tengan sentido en su contexto.",
+        "Desplazamiento entre campos con la tecla TAB.",
+        "Mostrar reglas de validación de contraseñas antes de ingresarlas.",
+        "Generar indicadores visuales sobre la fortaleza de la contraseña."
       ],
       "field_types": {
-        "Numérico": "Utilizar enteros/decimales.",
-        "Alfanumérico": "Utilizar enteros/decimales/caracteres/caracteres especiales.",
-        "String": "No permitir URLs. Restricciones de caracteres especiales.",
-        "Fecha": "Validación de rango (desde-hasta, límites en cada caso que lo requiera).",
-        "Desplegable": "Debe tener un valor, no repetidos, orden alfabético."
+        "Numérico": "Solo enteros o decimales válidos.",
+        "Alfanumérico": "Permitir combinación de números, letras y algunos caracteres especiales.",
+        "String": "No permitir URLs. Restricciones en caracteres especiales.",
+        "Fecha": "Validación de rango (desde-hasta) con límites configurables.",
+        "Desplegable": "Debe tener un valor seleccionado, sin duplicados, orden alfabético."
       }
     },
     {
       "category": "Tablas",
       "rules": [
-        "Alineación de las columnas centradas.",
+        "Alineación de las columnas centrada.",
+        "Números alineados al centro, texto a la izquierda, importes a la derecha, booleanos centrados.",
         "Tipografía contenida en las columnas.",
-        "Alineación de datos: número centrado, texto a la izquierda, importes a la derecha, booleanos centrados.",
-        "Paginación en las listas y selector de cantidad de datos por página.",
-        "Ordenamiento de los datos de las tablas por columna ascendente y descendente."
+        "Paginación en listas con selector de cantidad de elementos por página.",
+        "Ordenamiento ascendente y descendente por cada columna.",
+        "Las listas no deben mostrar más elementos de los configurados por el usuario."
       ]
     },
     {
-      "category": "Mensajes de confirmación de acciones",
+      "category": "Mensajes de Confirmación de Acciones",
       "rules": [
         "Cada acción debe tener un modal de confirmación (Crear, Modificar, Eliminar, Cancelar).",
-        "Mensaje acorde a la acción realizada.",
-        "El foco debe estar en el botón No/Cancelar en los mensajes de confirmación."
+        "Mensaje claro y acorde a la acción realizada.",
+        "El botón de No/Cancelar debe estar enfocado por defecto.",
+        "El mensaje debe indicar si la acción es irreversible.",
+        "El diseño del modal debe permitir tomar decisiones sin presión."
       ]
     },
     {
       "category": "Notificaciones",
       "rules": [
-        "Debe existir un mail estándar reutilizable para cambio de contraseña.",
-        "Envío de doble factor de autenticación."
+        "Definir una plantilla estándar para correos reutilizables.",
+        "El mail de cambio de contraseña debe incluir un enlace seguro.",
+        "Envío de código de autenticación de doble factor (2FA).",
+        "Compatibilidad con lectores de pantalla.",
+        "Los correos deben estar diseñados con estructura clara y accesible.",
+        "Incluir pie de página con información de soporte."
       ]
     },
     {
       "category": "Interacciones y Usabilidad",
       "rules": [
-        "Spinner en toda acción que demore en cargarse y el botón se debe bloquear.",
-        "Iconos estándar para eliminar y modificar, habilitados o deshabilitados según las condiciones de los datos.",
-        "Botón verde para aceptar o continuar, botón rojo para cancelar.",
-        "Mensajes de error claros, en lenguaje coloquial y no técnico."
+        "Spinner en toda acción que implique espera y bloqueo del botón.",
+        "Iconos estándar para eliminar y modificar, habilitados o deshabilitados según condiciones.",
+        "Botón verde para aceptar o continuar, rojo para cancelar.",
+        "Mensajes de error claros y en lenguaje comprensible.",
+        "Modo oscuro y ajuste del tamaño de fuente.",
+        "Navegación por teclado en toda la interfaz.",
+        "Los iconos deshabilitados deben tener tooltips explicativos.",
+        "Mostrar advertencias antes de eliminar un elemento crítico.",
+        "Diseño visual consistente con la identidad del sistema."
       ]
     },
     {
       "category": "Búsquedas",
       "rules": [
-        "Validación en los rangos en una búsqueda (desde-hasta).",
-        "Contemplar los límites para establecer rangos acordes con la pantalla."
+        "Validación en los rangos de búsqueda (desde-hasta).",
+        "Evitar valores ilógicos en filtros y rangos de búsqueda.",
+        "Sugerencias automáticas para evitar errores en los filtros.",
+        "Mostrar mensajes de error en tiempo real si el rango no es válido."
+      ]
+    },
+    {
+      "category": "Seguridad",
+      "rules": [
+        "Validación de correo electrónico con formato correcto y sin repetidos.",
+        "Validación de DNI (máximo 8 caracteres), CUIT (máximo 11 caracteres).",
+        "Validación de contraseñas: mínimo 8 caracteres, 1 mayúscula, 1 minúscula, 1 número y 1 carácter especial.",
+        "No permitir reutilizar contraseñas anteriores.",
+        "Resaltar visualmente los errores en los formularios de seguridad.",
+        "Enlaces de autenticación deben ser siempre HTTPS.",
+        "No permitir contraseñas que contengan información personal del usuario.",
+        "Evitar caracteres repetidos o secuencias comunes en contraseñas."
+      ]
+    },
+    {
+      "category": "Accesibilidad",
+      "rules": [
+        "Modo de alto contraste para mejorar la visibilidad.",
+        "Compatibilidad con lectores de pantalla y etiquetas ARIA.",
+        "Navegación clara y estructurada en la interfaz.",
+        "Enlaces de 'saltar al contenido' para accesibilidad.",
+        "Asegurar suficiente contraste entre el texto y el fondo.",
+        "Usar HTML semántico y atributos ARIA para mejorar la experiencia con lectores de pantalla."
+      ]
+    },
+    {
+      "category": "Paginación y Ordenamiento",
+      "rules": [
+        "Implementar paginación en listas extensas.",
+        "Permitir seleccionar la cantidad de elementos por página.",
+        "El paginador debe mantener la selección de página tras actualizar datos.",
+        "Ordenamiento por columnas alternando entre ascendente y descendente.",
+        "Mostrar un icono de flecha indicando el orden actual."
+      ]
+    },
+    {
+      "category": "Flujos de Confirmación",
+      "rules": [
+        "Los modales deben permitir una fácil cancelación de acciones.",
+        "El usuario debe recibir advertencias en acciones irreversibles.",
+        "El foco debe ubicarse en la opción de cancelación por defecto.",
+        "Las opciones deben ser claras y explícitas: 'Sí, eliminar' y 'No, cancelar'."
+      ]
+    },
+    {
+      "category": "Mensajería y Feedback al Usuario",
+      "rules": [
+        "Los mensajes de error deben explicar claramente el problema y cómo solucionarlo.",
+        "Evitar lenguaje técnico en los mensajes de error.",
+        "Si un proceso demora más de 10 segundos, mostrar un mensaje indicando que sigue en progreso.",
+        "Los mensajes de éxito deben ser breves y confirmativos."
+      ]
+    },
+    {
+      "category": "Modos de Visualización",
+      "rules": [
+        "Implementar modo oscuro con contraste adecuado.",
+        "Permitir ajustes de tamaño de fuente con unidades relativas (rem).",
+        "Guardar las preferencias del usuario en el almacenamiento local.",
+        "El sistema debe recordar la última configuración del usuario."
       ]
     }
   ]

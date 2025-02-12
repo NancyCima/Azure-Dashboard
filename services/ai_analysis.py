@@ -1,77 +1,102 @@
-from fastapi import HTTPException
-from bs4 import BeautifulSoup
-from typing import Dict, List
-import openai
-from openai import OpenAI
-from langdetect import detect
+import os
 import io
-from PIL import Image
 import base64
 import json
-import os
+import logging
+from typing import Dict, List, Optional, Tuple
+from fastapi import HTTPException
+from bs4 import BeautifulSoup
+from PIL import Image
+from langdetect import detect, LangDetectException
+import openai
 
-client = OpenAI()
+# Configuración de logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
 
-def process_image(image_content: bytes) -> str:
-    """Process and convert image to base64"""
+def process_image(image_content: bytes) -> Optional[str]:
+    """
+    Procesa la imagen y la convierte a una cadena codificada en base64.
+    """
     try:
+        # Abrir la imagen con PIL
         img = Image.open(io.BytesIO(image_content))
-
+        original_format = img.format
+        # Se usa PNG para formatos sin pérdida o GIF; sino JPEG.
+        save_format = 'PNG' if original_format in ['PNG', 'GIF'] else 'JPEG'
+        # Convertir a RGB si es necesario
         if img.mode != 'RGB':
             img = img.convert('RGB')
-
+        # Redimensionar si es muy grande (máximo 1024x1024)
         max_size = (1024, 1024)
         img.thumbnail(max_size, Image.Resampling.LANCZOS)
-
+        # Guardar la imagen en memoria
         img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format='JPEG', quality=85)
+        img.save(img_byte_arr, format=save_format, quality=85)
         img_byte_arr = img_byte_arr.getvalue()
-
+        # Convertir a base64
         return base64.b64encode(img_byte_arr).decode('utf-8')
     except Exception as e:
-        print(f"Error processing image: {e}")
+        logger.error(f"Error processing image: {e}")
         return None
 
-def load_general_criteria():
-    """Load general criteria from JSON file"""
+def load_general_criteria() -> Optional[Dict]:
+    """
+    Carga los criterios generales desde un archivo JSON ubicado en el mismo directorio.
+    """
     try:
         current_dir = os.path.dirname(os.path.abspath(__file__))
         file_path = os.path.join(current_dir, 'general_criteria.json')
-
         with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        print(f"Error loading general criteria: {e}")
+        logger.error(f"Error loading general criteria: {e}")
         return None
 
 def extract_existing_criteria(ticket_data: Dict) -> List[str]:
-    """Extract existing acceptance criteria from the ticket"""
+    """
+    Extrae los criterios de aceptación existentes del ticket.
+    """
     raw_criteria = BeautifulSoup(ticket_data.get('acceptance_criteria', ''), 'html.parser').get_text()
     return [line.strip('-* ').strip() for line in raw_criteria.split('\n') if line.strip()]
 
-def prepare_analysis_prompt(ticket_data: Dict, general_criteria: Dict = None, images: List[str] = None) -> tuple[str, str]:
-    """Prepare the analysis prompt based on ticket data, general criteria, and images"""
-    description = BeautifulSoup(ticket_data['description'], 'html.parser').get_text()
+def prepare_analysis_prompt(
+    ticket_data: Dict, 
+    general_criteria: Optional[Dict] = None, 
+    images: Optional[List] = None
+) -> Tuple[str, str]:
+    """
+    Prepara el prompt para el análisis combinando los datos del ticket, los criterios generales y las imágenes.
+    """
+    # Se limpia el HTML de la descripción y se extraen los criterios existentes.
+    description = BeautifulSoup(ticket_data.get('description', ''), 'html.parser').get_text()
     existing_criteria = extract_existing_criteria(ticket_data)
-
-    language = detect(description)
-
+    
+    # Detectar el idioma (se usa español por defecto en caso de fallo)
+    try:
+        language = detect(description) if description else 'es'
+    except LangDetectException:
+        language = 'es'
+    
     criteria_context = ""
     if general_criteria:
         criteria_context = "Criterios generales a considerar:\n" if language == 'es' else "General criteria to consider:\n"
-        for category in general_criteria["criteria"]:
-            criteria_context += f"\n{category['category']}:\n"
-            for rule in category["rules"]:
-                if rule not in existing_criteria:  # Evita repetir criterios existentes
+        for category in general_criteria.get("criteria", []):
+            criteria_context += f"\n{category.get('category', '')}:\n"
+            for rule in category.get("rules", []):
+                if rule not in existing_criteria:
                     criteria_context += f"- {rule}\n"
-
+    
     images_info = ""
     if images:
         images_info = "Se han proporcionado imágenes relevantes para el análisis.\n" if language == 'es' else "Relevant images have been provided for analysis.\n"
+    
+    prompt_intro = "Analiza esta historia de usuario para verificar su completitud y coherencia" if language == 'es' \
+                   else "Analyze this user story for completeness and coherence"
+    
+    base_prompt = f"""{prompt_intro}:
 
-    base_prompt = f"""{'Analiza esta historia de usuario para verificar su completitud y coherencia' if language == 'es' else 'Analyze this user story for completeness and coherence'}:
-
-Título: {ticket_data['title']}
+Título: {ticket_data.get('title', '')}
 Descripción: {description}
 Criterios de Aceptación Actuales: {', '.join(existing_criteria)}
 
@@ -94,11 +119,12 @@ Criterios de Aceptación Actuales: {', '.join(existing_criteria)}
 
 {'IMPORTANTE: Proporciona tu análisis y recomendaciones en español.' if language == 'es' else 'IMPORTANT: Provide your analysis and recommendations in English.'}
 """
-
     return base_prompt, language
 
 def parse_analysis_response(analysis: str, language: str) -> Dict:
-    """Parse the analysis response into structured sections"""
+    """
+    Parsea la respuesta del análisis de la IA en secciones estructuradas.
+    """
     sections = {
         'es': {
             'criteria': 'Criterios de Aceptación Faltantes:',
@@ -109,77 +135,89 @@ def parse_analysis_response(analysis: str, language: str) -> Dict:
             'suggestions': 'General Suggestions:'
         }
     }
-
+    
     missing_criteria = []
     general_suggestions = []
     current_section = None
-
+    
     for line in analysis.split('\n'):
         line = line.strip()
         if not line:
             continue
-
+        
+        # Detectar cambio de sección
         if sections[language]['criteria'] in line:
             current_section = 'criteria'
             continue
         elif sections[language]['suggestions'] in line:
             current_section = 'suggestions'
             continue
-
+        
+        # Agregar ítems a la sección correspondiente
         if line.startswith('- ') or line.startswith('* '):
             if current_section == 'criteria':
                 missing_criteria.append(line[2:].strip())
             elif current_section == 'suggestions':
                 general_suggestions.append(line[2:].strip())
-
+    
     return {
         "analysis": analysis,
-        "missingCriteria": missing_criteria,
+        "suggestedCriteria": missing_criteria,
         "generalSuggestions": general_suggestions,
         "requiresRevision": len(missing_criteria) > 0 or len(general_suggestions) > 0
     }
 
-def analyze_ticket(ticket_data: Dict, images: List[Dict] = None, general_criteria: Dict = None) -> Dict:
-    """Analyze ticket using GPT-4"""
-    try:
-        description = ticket_data.get('description', '').strip()
-        acceptance_criteria = ticket_data.get('acceptance_criteria', '').strip()
-
-        if not description and not acceptance_criteria:
-            raise HTTPException(
-                status_code=400,
-                detail="El ticket no tiene descripción ni criterios de aceptación para analizar"
+def analyze_ticket(
+    ticket_data: Dict, 
+    images: Optional[List[Dict]] = None, 
+    general_criteria: Optional[Dict] = None
+) -> Dict:
+    """
+    Analiza el ticket usando GPT-4 de OpenAI.
+    """
+    # Validar que el ticket tenga contenido para analizar
+    description = ticket_data.get('description', '').strip()
+    acceptance_criteria = ticket_data.get('acceptance_criteria', '').strip()
+    if not description and not acceptance_criteria:
+        raise HTTPException(status_code=400, detail="El ticket no tiene descripción ni criterios de aceptación para analizar")
+    
+    # Extraer la cadena base64 de cada imagen (si se enviaron)
+    base64_images = []
+    if images:
+        for img in images:
+            if 'base64' in img:
+                base64_images.append(img['base64'])
+    
+    # Preparar el prompt y detectar el idioma
+    base_prompt, language = prepare_analysis_prompt(ticket_data, general_criteria, base64_images)
+    
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an expert in user story analysis and software requirements. "
+                "Focus on providing actionable, specific feedback and ensure all field validations "
+                "and usability standards are met. Structure your response in two clear sections:\n"
+                "1. Missing Acceptance Criteria\n"
+                "2. General Suggestions\n"
+                "Respond in the same language as the user story."
             )
-
-        processed_images = [process_image(img['content']) for img in images] if images else []
-        base_prompt, language = prepare_analysis_prompt(ticket_data, general_criteria, processed_images)
-
-        messages = [
-            {
-                "role": "system",
-                "content": """You are an expert in user story analysis and software requirements. 
-                Focus on providing actionable, specific feedback and ensure all field validations 
-                and usability standards are met. Structure your response in two clear sections:
-                1. Missing Acceptance Criteria
-                2. General Suggestions
-                Respond in the same language as the user story."""
-            },
-            {
-                "role": "user",
-                "content": base_prompt
-            }
-        ]
-
-        response = client.chat.completions.create(
+        },
+        {
+            "role": "user",
+            "content": base_prompt
+        }
+    ]
+    
+    try:
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=messages,
             max_tokens=1000,
             temperature=0.7
         )
-
         analysis = response.choices[0].message.content
         return parse_analysis_response(analysis, language)
-
     except openai.APIError as e:
         raise HTTPException(status_code=500, detail=f"Error de API de OpenAI: {str(e)}")
     except openai.APIConnectionError as e:
@@ -188,3 +226,9 @@ def analyze_ticket(ticket_data: Dict, images: List[Dict] = None, general_criteri
         raise HTTPException(status_code=429, detail=f"Límite de API de OpenAI excedido: {str(e)}")
     except openai.AuthenticationError as e:
         raise HTTPException(status_code=401, detail=f"Error de autenticación de OpenAI: {str(e)}")
+    except openai.BadRequestError as e:
+        detail_msg = f"Solicitud incorrecta a la API de OpenAI: {str(e)}" if language == 'es' else f"Bad request to OpenAI API: {str(e)}"
+        raise HTTPException(status_code=400, detail=detail_msg)
+    except Exception as e:
+        logger.error(f"Unexpected error in analyze_ticket: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")

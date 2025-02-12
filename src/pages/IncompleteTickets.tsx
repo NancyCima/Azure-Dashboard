@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Filter, Check, X, Download,  ExternalLink } from 'lucide-react';
 import { UserStory, IncompleteTicket } from '../services/api';
-import { useTickets } from '../context/TicketsContext';
+import { useTickets } from '../contexts/TicketsContext';
 import Header from '../components/Header';
 import * as XLSX from 'xlsx';
 
@@ -31,15 +31,13 @@ function IncompleteTickets() {
             rel="noopener noreferrer"
             className="inline-flex items-center text-blue-600 hover:text-blue-800"
             onClick={(e) => {
-                e.preventDefault();
                 e.stopPropagation();
-                window.open(url, '_blank', 'noopener,noreferrer');
+                window.open(url, '_blank');
             }}
         >
             <ExternalLink className="w-4 h-4 ml-2" />
         </a>
     );
-
 
     // Inicializar los estados filtrados cuando cambien los datos del contexto
     useEffect(() => {
@@ -325,7 +323,7 @@ function IncompleteTickets() {
                                                     <td className="px-6 py-4 font-medium text-blue-800">
                                                         <div className="flex items-center">
                                                             #{story.id}
-                                                            <WorkItemLink url={story.url} />
+                                                            <WorkItemLink url={story.work_item_url} />
                                                         </div>
                                                     </td>
                                                     <td className="px-6 py-4 text-gray-700">{story.title}</td>
@@ -434,7 +432,7 @@ function IncompleteTickets() {
                                                 <td className="px-6 py-4 font-medium text-blue-800">
                                                     <div className="flex items-center">
                                                         #{ticket.id}
-                                                        <WorkItemLink url={ticket.url} />
+                                                        <WorkItemLink url={ticket.work_item_url} />
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-gray-700">{ticket.title}</td>
