@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { Filter, Check, X, Download,  ExternalLink } from 'lucide-react';
+import { Filter, Check, X, Download,  ExternalLink, ArrowUpDown, ChevronDown  } from 'lucide-react';
 import { UserStory, IncompleteTicket } from '../services/api';
 import { useTickets } from '../contexts/TicketsContext';
 import Header from '../components/Header';
-import * as XLSX from 'xlsx';
+import { formatDate } from '../utils/dateUtils';
+import { exportToExcel } from '../utils/excelExport';
 
 function IncompleteTickets() {
     const { userStories: contextUserStories, incompleteTickets: contextIncompleteTickets, loading, error } = useTickets();
@@ -18,11 +19,25 @@ function IncompleteTickets() {
     const [showWithAcceptanceCriteria, setShowWithAcceptanceCriteria] = useState(false);
     const [isFilterMenuOpen, setIsFilterMenuOpen] = useState(false);
 
+    const [assignedFilter, setAssignedFilter] = useState<string>('');
+    const uniqueAssignedUsers = Array.from(new Set(contextUserStories.map((story) => story.assigned_to || 'No asignado')));
+
+    const [tagFilter, setTagFilter] = useState<string>('');
+    const uniqueTag = Array.from(new Set(contextUserStories.map((story) => story.tags || 'Sin etiquetas')));
+    
+    const [stateFilter, setStateFilter] = useState<string>('');
+    const uniqueState = Array.from(new Set(contextUserStories.map((story) => story.state || 'No asignado')));
+    
+    const [selectedDates, setSelectedDates] = useState<string[]>([]);
+    const [isDateFilterOpen, setIsDateFilterOpen] = useState(false);
+    const uniqueDates = Array.from(new Set(contextUserStories.map(story => story.due_date).filter(Boolean))).sort();
+
     // Filtros para Otros Tickets
     const [ticketState, setTicketState] = useState<string>('');
     const [showWithoutDescriptionTickets, setShowWithoutDescriptionTickets] = useState(false);
     const [showWithoutEstimatedHours, setShowWithoutEstimatedHours] = useState(false);
     const [showWithoutCompletedHours, setShowWithoutCompletedHours] = useState(false);
+    const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
 
     const WorkItemLink = ({ url }: { url: string }) => (
         <a
@@ -72,6 +87,24 @@ function IncompleteTickets() {
         if (showWithAcceptanceCriteria) {
             filtered = filtered.filter((story) => story.acceptanceCriteria);
         }
+        if (assignedFilter) {
+            filtered = filtered.filter((story) => story.assigned_to === assignedFilter);
+        }
+        if (tagFilter) {
+            filtered = filtered.filter((story) => story.tags === tagFilter);
+        }
+        if (stateFilter) {
+            filtered = filtered.filter((story) => story.state === stateFilter);
+        }
+        if (selectedDates.length > 0 && !selectedDates.includes("Todos")) {
+            filtered = filtered.filter(story => selectedDates.includes(story.due_date));
+        }
+        // Ordenar por fecha de entrega
+        filtered.sort((a, b) => {
+            const dateA = new Date(a.due_date || '9999-12-31').getTime();
+            const dateB = new Date(b.due_date || '9999-12-31').getTime();
+            return sortOrder === 'asc' ? dateA - dateB : dateB - dateA;
+        });
 
         setFilteredStories(filtered);
     }, [
@@ -80,6 +113,11 @@ function IncompleteTickets() {
         showWithDescription,
         showWithAcceptanceCriteria,
         contextUserStories,
+        assignedFilter,
+        tagFilter,
+        stateFilter,
+        selectedDates, 
+        sortOrder
     ]);
 
     // Filtrar Otros Tickets
@@ -137,39 +175,23 @@ function IncompleteTickets() {
         );
     };
 
-    const mapUserStoryToExcel = (story: UserStory) => ({
-        ID: story.id,
-        Título: story.title,
-        'Tiene Descripción': story.description ? 'Sí' : 'No',
-        'Tiene Criterios de Aceptación': story.acceptanceCriteria ? 'Sí' : 'No'
-    });
-
-    const mapTicketToExcel = (ticket: IncompleteTicket) => ({
-        ID: ticket.id,
-        Título: ticket.title,
-        Estado: ticket.state,
-        'Horas Estimadas': ticket.estimatedHours,
-        'Horas Completadas': ticket.completedHours,
-        'Tiene Descripción': ticket.description.trim() !== '' ? 'Sí' : 'No'
-    });
-
-    const exportToExcel = () => {
-        let workbookData;
-
-        if (selectedTab === 'userStories') {
-            workbookData = filteredStories.map(mapUserStoryToExcel);
+    // Manejar la selección de fechas
+    const handleDateSelection = (date: string) => {
+        let updatedDates;
+        if (date === "Todos") {
+            updatedDates = selectedDates.includes("Todos") ? [] : ["Todos", ...uniqueDates];
         } else {
-            workbookData = filteredTickets.map(mapTicketToExcel);
+            updatedDates = selectedDates.includes(date) 
+                ? selectedDates.filter(d => d !== date && d !== "Todos") 
+                : [...selectedDates, date];
+
+            if (updatedDates.length === uniqueDates.length) {
+                updatedDates = ["Todos", ...uniqueDates];
+            }
         }
-
-        const worksheet = XLSX.utils.json_to_sheet(workbookData);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, selectedTab === 'userStories' ? 'User Stories' : 'Tickets');
-        
-        // Generar el archivo Excel
-        XLSX.writeFile(workbook, selectedTab === 'userStories' ? 'user-stories.xlsx' : 'tickets.xlsx');
+        setSelectedDates(updatedDates);
     };
-
+    
     return (
         <div className="min-h-screen bg-white">
             <Header showBackButton />
@@ -202,12 +224,13 @@ function IncompleteTickets() {
                             </button>
                         </div>
                         <button
-                            onClick={exportToExcel}
+                            onClick={() => exportToExcel(selectedTab, filteredStories, filteredTickets)}
                             className="flex items-center px-4 py-2 bg-[#2461b3] text-white rounded-lg hover:bg-[#1a4a8f] transition-colors"
                         >
                             <Download className="w-5 h-5 mr-2" />
                             Exportar a Excel
                         </button>
+
                     </div>
 
                     {loading && (
@@ -275,7 +298,7 @@ function IncompleteTickets() {
                                                 Sin criterios de aceptación
                                             </span>
                                         </label>
-                                        <label className="inline-flex items-center">
+                                        <label className="inline-flex items-center mb-3">
                                             <input
                                                 type="checkbox"
                                                 className="form-checkbox text-blue-600"
@@ -315,6 +338,87 @@ function IncompleteTickets() {
                                                 <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">
                                                     Criterios de Aceptación
                                                 </th>
+                                                <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">
+                                                    Estado
+                                                    <select
+                                                        className="ml-2 px-2 py-1 border rounded text-gray-700 hover:border-blue-500"
+                                                        value={stateFilter}
+                                                        onChange={(e) => setStateFilter(e.target.value)}
+                                                    >
+                                                        <option value="">Todos</option>
+                                                        {uniqueState.map((user) => (
+                                                            <option key={user} value={user}>{user}</option>
+                                                        ))}
+                                                    </select>
+                                                </th>
+                                                <th className="px-3 py-3 text-left text-sm font-semibold text-blue-800 w-[120px] max-w-[120px]">
+                                                    Asignado
+                                                    <select
+                                                        className="ml-2 px-2 py-1 border rounded text-gray-700 w-full hover:border-blue-500"
+                                                        value={assignedFilter}
+                                                        onChange={(e) => setAssignedFilter(e.target.value)}
+                                                    >
+                                                        <option value="">Todos</option>
+                                                        {uniqueAssignedUsers.map((user, index) => (
+                                                            <option key={index} value={user?.toString() || ''}>{user}</option>
+                                                        ))}
+                                                    </select>
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800 ">
+                                                    Tags
+                                                    <select
+                                                        className="ml-2 px-2 py-1 border rounded text-gray-700 hover:border-blue-500"
+                                                        value={tagFilter}
+                                                        onChange={(e) => setTagFilter(e.target.value)}
+                                                    >
+                                                        <option value="">Todos</option>
+                                                        {uniqueTag.map((user) => (
+                                                            <option key={user} value={user}>{user}</option>
+                                                        ))}
+                                                    </select>
+                                                </th>
+                                                <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">
+                                                    Fecha de entrega
+                                                    <div className="relative inline-block ml-2">
+                                                        <button 
+                                                            className="ml-2 px-2 py-1 border border-gray-300 rounded bg-white text-gray-700 hover:border-blue-500"
+                                                            onClick={() => setIsDateFilterOpen(!isDateFilterOpen)}
+                                                        >
+                                                            Filtro
+                                                            <ChevronDown className="w-4 h-4 ml-1" />
+                                                        </button>
+                                                        {isDateFilterOpen && (
+                                                            <div className="absolute z-10 bg-white border border-gray-300 rounded shadow-lg p-2 mt-1 w-48">
+                                                                <label className="flex items-center">
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        checked={selectedDates.includes("Todos")}
+                                                                        onChange={() => handleDateSelection("Todos")}
+                                                                        className="mr-2"
+                                                                    />
+                                                                    Todos
+                                                                </label>
+                                                                {uniqueDates.map(date => (
+                                                                    <label key={date} className="flex items-center">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={selectedDates.includes(date)}
+                                                                            onChange={() => handleDateSelection(date)}
+                                                                            className="mr-2"
+                                                                        />
+                                                                        {formatDate(date)}
+                                                                    </label>
+                                                                ))}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                    <button
+                                                        className="ml-2 text-gray-600 hover:text-blue-600"
+                                                        onClick={() => setSortOrder(sortOrder === 'asc' ? 'desc' : 'asc')}
+                                                    >
+                                                        <ArrowUpDown className="w-4 h-4 inline-block" />
+                                                    </button>
+                                                </th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
@@ -326,13 +430,17 @@ function IncompleteTickets() {
                                                             <WorkItemLink url={story.work_item_url} />
                                                         </div>
                                                     </td>
-                                                    <td className="px-6 py-4 text-gray-700">{story.title}</td>
+                                                    <td className="px-3 py-4 text-gray-700 w-[120px] max-w-[250px] truncate overflow-hidden text-ellipsis whitespace-nowrap">{story.title}</td>
                                                     <td className="px-6 py-4">
                                                         <CompletionIndicator isComplete={Boolean(story.description)} />
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <CompletionIndicator isComplete={Boolean(story.acceptanceCriteria)} />
                                                     </td>
+                                                    <td className="px-6 py-4 text-gray-700">{story.state}</td>
+                                                    <td className="px-3 py-4 text-gray-700 w-[120px] max-w-[140px] truncate overflow-hidden text-ellipsis whitespace-nowrap">{story.assigned_to}</td>
+                                                    <td className="px-6 py-4 text-gray-700">{story.tags}</td>
+                                                    <td className="px-6 py-4 text-gray-700">{formatDate(story.due_date)}</td>
                                                 </tr>
                                             ))}
                                         </tbody>

@@ -174,7 +174,16 @@ function TicketsAnalysis() {
                   <div className="flex justify-between items-start mb-6">
                     <div>
                       <div className="flex items-center mb-2">
-                        <h2 className="text-2xl font-bold text-gray-900">{selectedTicket.title}</h2>
+                        <h2 className="text-2xl font-bold text-gray-900 mr-2">{selectedTicket.title}</h2>
+                        <a
+                          href={selectedTicket.work_item_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-blue-600 hover:text-blue-800"
+                          onClick={(e) => e.stopPropagation()}
+                        >
+                          <ExternalLink className="w-5 h-5" />
+                        </a>
                       </div>
                       <div className="flex items-center">
                         <User className="w-4 h-4 text-blue-600 mr-2" />
