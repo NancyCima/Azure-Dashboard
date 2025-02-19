@@ -258,67 +258,21 @@ async def get_work_items(state: str = None):
 
         data = response.json()
 
-        # Procesar cada User Story en la data
+        # Limpiar el HTML en la descripción y criterios de aceptación
         for item in data:
-
             item['description'] = clean_html_content(item.get('description', ''))
             item['acceptance_criteria'] = clean_html_content(item.get('acceptance_criteria', ''))
 
-            # Extraer IDs de los childs usando expresión regular
-            child_links = item.get('child_links', [])
-            child_ids = [match.group(1) for link in child_links if (match := re.search(r'/workItems/(\d+)', link))]
-
-            # Inicializar la lista de child work items para cada item
-            item['child_work_items'] = []
-
-            # Agregar debug para ver si hay child IDs
-            if not child_ids:
-                print(f"No hay child IDs para la User Story {item['id']}")
-
-            for child_id in child_ids:
-                child_url = f"{API_BASE_URL}/wit/workItems/{child_id}?api-version=6.0"
-                child_response = requests.get(child_url)
-                
-                if child_response.status_code == 200:
-                    child_data = child_response.json()
-                    fields = child_data.get("fields", {})
-
-                    child_item = {
-                        "id": child_data.get("id"),
-                        "title": fields.get("System.Title", "Sin título"),
-                        "state": fields.get("System.State", "Desconocido"),
-                        "work_item_type": fields.get("System.WorkItemType", "Tarea"),
-                        "estimated_hours": fields.get("Microsoft.VSTS.Scheduling.OriginalEstimate", 0),
-                        "completed_hours": fields.get("Microsoft.VSTS.Scheduling.CompletedWork", 0),
-                        "work_item_url": f"{API_BASE_URL}/_workitems/edit/{child_data.get('id')}" if child_data.get("id") else "N/A"
-                    }
-
-                    print(f"Child encontrado para {item['id']}: {child_item}")
-                    item['child_work_items'].append(child_item)
-
-                else:
-                    print(f"No se pudo obtener el child {child_id} para User Story {item['id']}")
-                    item['child_work_items'].append({
-                        "id": child_id,
-                        "error": "No se pudo obtener la información del child",
-                        "work_item_url": "N/A"
-                    })
-
         # Filtrar los work items utilizando la función externa
         filtered_data = filter_work_items(data)
-
-        # 🔴 Verificar si la filtración está eliminando `child_work_items`
-        for i, item in enumerate(filtered_data[:3]):  # Mostramos los primeros 3 resultados
-            print(f"Final User Story {i + 1}: {item}")
-
+        
         if state:
             filtered_data = [item for item in filtered_data if item.get("state") == state]
-
+        
         return filtered_data
 
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/analyze-ticket")
 async def analyze_ticket_endpoint(

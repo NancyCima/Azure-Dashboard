@@ -12,7 +12,7 @@ function Home() {
         <div className="max-w-7xl mx-auto px-4 py-12">
             {/* Title */}
             <h1 className="text-4xl font-bold text-[#2461b3] text-center mb-16">
-            Projects Management
+                Gestión de Proyectos
             </h1>
             {/* Cards Container */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
@@ -26,11 +26,11 @@ function Home() {
                 />
                 <div className="p-6">
                     <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-semibold text-blue-800">Incomplete Tickets</h3>
+                    <h3 className="text-xl font-semibold text-blue-800">Tickets Incompletos</h3>
                     <Ticket className="text-blue-600 w-6 h-6" />
                     </div>
                     <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                    View Tickets
+                    Ver Tickets
                     </button>
                 </div>
                 </div>
@@ -45,11 +45,11 @@ function Home() {
                 />
                 <div className="p-6">
                     <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-xl font-semibold text-blue-800">Tickets Analysis</h3>
+                    <h3 className="text-xl font-semibold text-blue-800">Análisis de Tickets</h3>
                     <LineChart className="text-blue-600 w-6 h-6" />
                     </div>
                     <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                    View Analysis
+                    Ver Análisis
                     </button>
                 </div>
                 </div>
@@ -68,7 +68,7 @@ function Home() {
                     <LayoutDashboard className="text-blue-600 w-6 h-6" />
                     </div>
                     <button className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 transition-colors">
-                    View Dashboard
+                    Ver Dashboard
                     </button>
                 </div>
                 </div>
