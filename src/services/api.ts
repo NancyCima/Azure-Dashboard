@@ -7,16 +7,33 @@ interface AssignedTo {
 }
 
 export interface Ticket {
+    id: number;
+    title: string;
+    state: string;
+    assigned_to: AssignedTo | string;
+    work_item_type: string;
+    changed_date: string;
+    description: string;
+    acceptance_criteria: string;
+    image_url?: string;
+    work_item_url: string;
+    story_points?: string | number;
+    estimated_hours?: string | number;
+    completed_hours?: string | number;
+    due_date?: string;
+    tags?: string;
+    child_links?: string[];
+    parent_id?: number;
+}
+
+export interface WorkItem {
   id: number;
   title: string;
   state: string;
-  assigned_to: AssignedTo;
-  work_item_type: string;
-  changed_date: string;
-  description: string;
-  acceptance_criteria: string;
-  image_url?: string;
+  estimated_hours: string | number;
+  completed_hours: string | number;
   work_item_url: string;
+  work_item_type: string;
 }
 
 export interface UserStory {
@@ -29,7 +46,9 @@ export interface UserStory {
     tags: string;
     due_date: string;
     work_item_url: string;
-    story_points:number;
+  story_points?: string | number;
+  child_work_items?: WorkItem[];
+  child_links?: string[];
 }
 
 export interface IncompleteTicket {

@@ -1,6 +1,5 @@
 import * as XLSX from 'xlsx';
 import { UserStory, IncompleteTicket } from '../services/api';
-import { clean_html_content } from 'main.py'
 import { formatDate } from './dateUtils';
 
 // Mapeo de User Stories a formato Excel
