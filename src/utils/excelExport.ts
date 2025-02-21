@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import { UserStory, IncompleteTicket } from '../services/api';
 import { formatDate } from './dateUtils';
+import { cleanHtmlContent } from './htmlUtils';
 
 // Mapeo de User Stories a formato Excel
 function mapUserStoryToExcel(story: UserStory) {
@@ -11,8 +12,8 @@ function mapUserStoryToExcel(story: UserStory) {
     return {
         ID: story.id,
         Título: story.title,
-        Descripción: story.description || 'No disponible',
-        'Criterios de Aceptación': story.acceptanceCriteria || 'No disponible',
+        Descripción: cleanHtmlContent(story.description) || 'No disponible',
+        'Criterios de Aceptación': cleanHtmlContent(story.acceptanceCriteria) || 'No disponible',
         Estado: story.state,
         Asignado: story.assigned_to || 'No asignado',
         Tags: tags,
@@ -28,7 +29,7 @@ function mapTicketToExcel(ticket: IncompleteTicket) {
         Estado: ticket.state,
         'Horas Estimadas': ticket.estimatedHours || 'No disponible',
         'Horas Completadas': ticket.completedHours || 'No disponible',
-        Descripción: ticket.description.trim() || 'No disponible',
+        Descripción: cleanHtmlContent(ticket.description) || 'No disponible',
     };
 }
 

@@ -322,14 +322,14 @@ function IncompleteTickets() {
                                     </p>
                                 </div>
                             ) : (
-                                <div className="overflow-x-auto">
-                                    <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                                <div className="w-full max-w-screen-2xl px-6 mx-auto overflow-x-auto">
+                                    <table className="w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                                         <thead>
                                             <tr className="bg-blue-50">
                                                 <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">
                                                     ID
                                                 </th>
-                                                <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">
+                                                <th className="px-4 py-3 text-left text-sm font-semibold text-blue-800 w-[180px] min-w-[180px]">
                                                     Título
                                                 </th>
                                                 <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">
@@ -338,6 +338,7 @@ function IncompleteTickets() {
                                                 <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">
                                                     Criterios de Aceptación
                                                 </th>
+                                                <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">Story Points</th>
                                                 <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">
                                                     Estado
                                                     <select
@@ -430,12 +431,15 @@ function IncompleteTickets() {
                                                             <WorkItemLink url={story.work_item_url} />
                                                         </div>
                                                     </td>
-                                                    <td className="px-3 py-4 text-gray-700 w-[120px] max-w-[250px] truncate overflow-hidden text-ellipsis whitespace-nowrap">{story.title}</td>
+                                                    <td className="px-4 py-4 text-gray-700 w-[180px] min-w-[180px]">{story.title}</td>
                                                     <td className="px-6 py-4">
                                                         <CompletionIndicator isComplete={Boolean(story.description)} />
                                                     </td>
                                                     <td className="px-6 py-4">
                                                         <CompletionIndicator isComplete={Boolean(story.acceptanceCriteria)} />
+                                                    </td>
+                                                    <td className="px-6 py-4">
+                                                        <CompletionIndicator isComplete={typeof story.story_points === "number" && story.story_points > 0} />
                                                     </td>
                                                     <td className="px-6 py-4 text-gray-700">{story.state}</td>
                                                     <td className="px-3 py-4 text-gray-700 w-[120px] max-w-[140px] truncate overflow-hidden text-ellipsis whitespace-nowrap">{story.assigned_to}</td>
@@ -522,12 +526,13 @@ function IncompleteTickets() {
                             </div>
 
                             {/* Tabla */}
-                            <div className="overflow-x-auto">
-                                <table className="min-w-full bg-white border border-gray-200 rounded-lg shadow-sm">
+                            <div className="w-full max-w-screen-2xl px-6 mx-auto overflow-x-auto">
+                                <table className="w-full bg-white border border-gray-200 rounded-lg shadow-sm">
                                     <thead>
                                         <tr className="bg-blue-50">
                                             <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">ID</th>
                                             <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">Título</th>
+                                            <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">Tipo de Ticket</th>
                                             <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">Estado</th>
                                             <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">Estimación (Horas)</th>
                                             <th className="px-6 py-3 text-left text-sm font-semibold text-blue-800">Horas Completadas</th>
@@ -544,6 +549,7 @@ function IncompleteTickets() {
                                                     </div>
                                                 </td>
                                                 <td className="px-6 py-4 text-gray-700">{ticket.title}</td>
+                                                <td className="px-6 py-4 text-gray-700">{ticket.work_item_type}</td>
                                                 <td className="px-6 py-4 text-gray-700">{ticket.state}</td>
                                                 <td className="px-6 py-4">
                                                     <CompletionIndicator 

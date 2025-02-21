@@ -68,8 +68,8 @@ function Dashboard() {
 
     const calculateProgress = (workItems: WorkItem[]) => {
         if (!workItems || workItems.length === 0) return 0;
-    
-        // ✅ Si todos los work items están en estado "Closed", la User Story está al 100%
+
+    // ✅ Si todos los work items están en estado "Closed", la User Story está al 100%
         const allClosed = workItems.every(item => item.state === "Closed");
         if (allClosed) return 100;
     
@@ -116,7 +116,7 @@ function Dashboard() {
                 </span>
             );
         }
-    
+
         // Cálculo del estimado total
         const totalEstimatedFromWorkItems = story.workItems.reduce(
             (sum, item) => sum + Number(item.estimated_hours || 0), 0
@@ -132,26 +132,24 @@ function Dashboard() {
         );
     
         const difference = actualHours - estimatedHours;
-        const isOverEstimated = difference > 0;
-        const isUnderEstimated = difference < 0;
     
         return (
-            <div className="flex items-center space-x-4">
-                <div className="flex items-center">
+            <div className="grid grid-cols-[auto_auto_auto] gap-2 items-center w-full">
+                <div className="flex items-center whitespace-nowrap">
                     <Clock className="w-4 h-4 mr-1 text-gray-500" />
                     <span className="text-sm text-gray-600">
                         Est: {estimatedHours}h
                     </span>
                 </div>
-                <div className="flex items-center">
+                <div className="flex items-center whitespace-nowrap">
                     <Clock className="w-4 h-4 mr-1 text-gray-500" />
                     <span className="text-sm text-gray-600">
                         Real: {actualHours}h
                     </span>
                 </div>
                 {difference !== 0 && (
-                    <span className={`text-sm flex items-center ${isOverEstimated ? 'text-red-600' : 'text-green-600'}`}>
-                        {isOverEstimated ? '+' : ''}{difference}h
+                    <span className={`text-sm flex items-center whitespace-nowrap ${difference > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                        {difference > 0 ? '+' : ''}{difference}h
                     </span>
                 )}
             </div>
@@ -192,7 +190,7 @@ function Dashboard() {
                 }));
 
             // Extraer el entregable de los tags
-            const entregable = story.tags?.split(';')
+                const entregable = story.tags?.split(';')
                 .find(tag => tag.trim().toLowerCase().startsWith('entregable'))?.trim();
 
             return {
@@ -209,7 +207,7 @@ function Dashboard() {
             };
         });
 
-    // Organizar las user stories por etapa
+     // Organizar las user stories por etapa   
     const storiesByStage = stages.map(stage => {
         const storiesInStage = userStories.filter(story => {
             if (!story.entregable) return false;
@@ -228,7 +226,7 @@ function Dashboard() {
                 className="hover:bg-blue-50 cursor-pointer"
                 onClick={() => toggleStory(story.id)}
             >
-                <td className="px-2 py-4 whitespace-nowrap w-[7%]">
+                <td className="px-2 py-4 whitespace-nowrap w-[8%]">
                     <div className="flex items-center">
                         {expandedStories.includes(story.id) 
                             ? <ChevronDown className="w-4 h-4 mr-1 text-blue-600" />
@@ -252,10 +250,10 @@ function Dashboard() {
                 <td className="px-2 py-4 w-[20%]">
                     <span className="text-gray-900 line-clamp-2">{story.title}</span>
                 </td>
-                <td className="px-2 py-4 w-[10%]">
+                <td className="px-2 py-4 w-[12%]">
                     <div className="flex items-center text-gray-600">
                         <User className="w-4 h-4 mr-1" />
-                        <span className="truncate">{story.assignedTo}</span>
+                        <span className="truncate max-w-[120px]">{story.assignedTo}</span>
                     </div>
                 </td>
                 <td className="px-2 py-4 w-[8%]">
@@ -269,7 +267,7 @@ function Dashboard() {
                         {formatDate(story.dueDate)}
                     </div>
                 </td>
-                <td className="px-2 py-4 w-[13%]">
+                <td className="px-2 py-4 w-[15%]">
                     <div className="flex flex-wrap gap-1">
                         {story.tags.map((tag, index) => (
                             <span 
@@ -282,11 +280,11 @@ function Dashboard() {
                         ))}
                     </div>
                 </td>
-                <td className="px-2 py-4 w-[13%]">
+                <td className="px-2 py-4 w-[12%]">
                     <EffortComparison story={story} />
                 </td>
-                <td className="px-2 py-4 w-[17%]">
-                    <div>
+                <td className="px-2 py-4 w-[13%]">
+                    <div className="w-full">
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-sm font-medium text-blue-800">
                                 {calculateProgress(story.workItems)}%
@@ -303,7 +301,7 @@ function Dashboard() {
                     
                     return (
                         <tr key={item.id} className="bg-gray-50 border-l-4 border-blue-100">
-                            <td className="px-6 py-3 pl-16">
+                            <td className="px-2 py-3 pl-12">
                                 <div className="flex items-center">
                                     {isQaTask && <Flame className="w-4 h-4 mr-1 text-yellow-500" />}
                                     <span className="font-medium text-gray-600">#{item.id}</span>
@@ -317,28 +315,34 @@ function Dashboard() {
                                     </a>
                                 </div>
                             </td>
-                            <td className="px-6 py-3">
-                                <span className={`text-gray-600`}>
+                            <td className="px-2 py-3">
+                                <span className="text-gray-600 line-clamp-1">
                                     {item.title}
                                 </span>
                             </td>
-                            <td className="px-6 py-3"></td>
-                            <td className="px-6 py-3">
+                            <td className="px-2 py-3">
+                                <span className="text-gray-500">-</span>
+                            </td>
+                            <td className="px-2 py-3">
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                     {item.state}
                                 </span>
                             </td>
-                            <td className="px-6 py-3"></td>
-                            <td className="px-6 py-3"></td>
-                            <td className="px-6 py-3">
-                                <div className="flex items-center space-x-4">
-                                    <div className="flex items-center">
+                            <td className="px-2 py-3">
+                                <span className="text-gray-500">-</span>
+                            </td>
+                            <td className="px-2 py-3">
+                                <span className="text-gray-500">-</span>
+                            </td>
+                            <td className="px-2 py-3">
+                                <div className="grid grid-cols-[auto_auto] gap-2 items-center">
+                                    <div className="flex items-center whitespace-nowrap">
                                         <Clock className="w-4 h-4 mr-1 text-gray-500" />
                                         <span className="text-sm text-gray-600">
                                             Est: {item.estimated_hours}h
                                         </span>
                                     </div>
-                                    <div className="flex items-center">
+                                    <div className="flex items-center whitespace-nowrap">
                                         <Clock className="w-4 h-4 mr-1 text-gray-500" />
                                         <span className="text-sm text-gray-600">
                                             Real: {item.completed_hours}h
@@ -346,8 +350,8 @@ function Dashboard() {
                                     </div>
                                 </div>
                             </td>
-                            <td className="px-6 py-3">
-                                <div className="w-64">
+                            <td className="px-2 py-3">
+                                <div className="w-full">
                                     <div className="flex items-center justify-between mb-1">
                                         <span className="text-sm font-medium text-blue-800">
                                             {progress}%
@@ -366,7 +370,7 @@ function Dashboard() {
     return (
         <div className="min-h-screen bg-white">
             <Header showBackButton />
-            <div className='p-4 lg:p-8'>
+            <div className="p-4 lg:p-8">
                 <div className="max-w-[1600px] mx-auto">
                     <div className="w-full">
                         <h1 className="text-4xl font-bold text-blue-800 mb-8">Dashboard</h1>
@@ -410,18 +414,18 @@ function Dashboard() {
                                         </div>
                                         
                                         {expandedStages.includes(stage.id) && (
-                                            <div>
+                                            <div className="overflow-x-auto">
                                                 <table className="w-full table-auto">
                                                     <thead>
                                                         <tr className="bg-blue-50">
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[7%]">ID</th>
+                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[8%]">ID</th>
                                                             <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[20%]">Título</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[10%]">Asignado a</th>
+                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[12%]">Asignado a</th>
                                                             <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[8%]">Estado</th>
                                                             <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[12%]">Fecha de Entrega</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[13%]">Tags</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[13%]">Esfuerzo</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[17%]">Progreso</th>
+                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[15%]">Tags</th>
+                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[12%]">Esfuerzo</th>
+                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[13%]">Progreso</th>
                                                         </tr>
                                                     </thead>
                                                     <tbody className="divide-y divide-gray-200">

@@ -2,13 +2,11 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 import requests
-import re
 from typing import Optional, List, Dict
 import json
 import openai
 import os
 from dotenv import load_dotenv
-from bs4 import BeautifulSoup
 from services.ai_analysis import analyze_ticket, process_image, load_general_criteria
 import bcrypt
 import mysql.connector
@@ -61,44 +59,6 @@ if not OPENAI_API_KEY:
     print("Warning: OPENAI_API_KEY not found in environment variables")
 else:
     openai.api_key = OPENAI_API_KEY
-
-def clean_html_content(html_content: str) -> str:
-    """
-    Limpia el contenido HTML manteniendo la estructura pero removiendo estilos y atributos innecesarios.
-    Si el contenido es vacío o irrelevante, devuelve una cadena vacía.
-    """
-    if not html_content or html_content.strip() in ["No disponible", "", "<div></div>", "<br>"]:
-        return ""
-    
-    # Usar BeautifulSoup para parsear el HTML
-    soup = BeautifulSoup(html_content, 'html.parser')
-    
-    # Remover atributos (excepto 'href' en enlaces)
-    for tag in soup.find_all(True):
-        allowed_attrs = ['href'] if tag.name == 'a' else []
-        attrs_to_remove = [attr for attr in tag.attrs if attr not in allowed_attrs]
-        for attr in attrs_to_remove:
-            del tag[attr]
-
-    # Convertir <br> en saltos de línea
-    for br in soup.find_all(['br']):
-        br.replace_with('\n' + br.text)
-
-    # Convertir <div> en <p>
-    for div in soup.find_all('div'):
-        div.name = 'p'
-
-    # Asegurar formato adecuado en listas
-    for ul in soup.find_all('ul'):
-        # Remover espacios en blanco excesivos en items de lista
-        for li in ul.find_all('li'):
-            li.string = li.get_text().strip()
-    
-    # Remover líneas vacías múltiples
-    html = str(soup)
-    html = re.sub(r'\n\s*\n', '\n', html)
-    
-    return html
 
 def filter_work_items(data):
     """
@@ -183,17 +143,6 @@ async def get_user_stories():
             cleaned_value = value.strip()
             return cleaned_value in ["", "<div></div>", "<br>", "No disponible"]
 
-        # Limpieza de los campos y evaluación
-        for story in user_stories:
-            original_description = story.get('description', '')
-            original_criteria = story.get('acceptance_criteria', '')
-
-            # Limpiar los campos
-            story['description'] = clean_html_content(original_description)
-            story['acceptance_criteria'] = clean_html_content(original_criteria)
-
-
-
         # Filtrar User Stories incompletas
         filtered_user_stories = [
             story for story in user_stories
@@ -222,6 +171,7 @@ async def get_incomplete_tickets():
             {
                 "id": item.get("id"),
                 "title": item.get("title"),
+                "work_item_type": item.get("work_item_type"),
                 "state": item.get("state"),
                 "estimatedHours": (
                     float(item.get("estimated_hours")) 
@@ -258,67 +208,16 @@ async def get_work_items(state: str = None):
 
         data = response.json()
 
-        # Procesar cada User Story en la data
-        for item in data:
-
-            item['description'] = clean_html_content(item.get('description', ''))
-            item['acceptance_criteria'] = clean_html_content(item.get('acceptance_criteria', ''))
-
-            # Extraer IDs de los childs usando expresión regular
-            child_links = item.get('child_links', [])
-            child_ids = [match.group(1) for link in child_links if (match := re.search(r'/workItems/(\d+)', link))]
-
-            # Inicializar la lista de child work items para cada item
-            item['child_work_items'] = []
-
-            # Agregar debug para ver si hay child IDs
-            if not child_ids:
-                print(f"No hay child IDs para la User Story {item['id']}")
-
-            for child_id in child_ids:
-                child_url = f"{API_BASE_URL}/wit/workItems/{child_id}?api-version=6.0"
-                child_response = requests.get(child_url)
-                
-                if child_response.status_code == 200:
-                    child_data = child_response.json()
-                    fields = child_data.get("fields", {})
-
-                    child_item = {
-                        "id": child_data.get("id"),
-                        "title": fields.get("System.Title", "Sin título"),
-                        "state": fields.get("System.State", "Desconocido"),
-                        "work_item_type": fields.get("System.WorkItemType", "Tarea"),
-                        "estimated_hours": fields.get("Microsoft.VSTS.Scheduling.OriginalEstimate", 0),
-                        "completed_hours": fields.get("Microsoft.VSTS.Scheduling.CompletedWork", 0),
-                        "work_item_url": f"{API_BASE_URL}/_workitems/edit/{child_data.get('id')}" if child_data.get("id") else "N/A"
-                    }
-
-                    print(f"Child encontrado para {item['id']}: {child_item}")
-                    item['child_work_items'].append(child_item)
-
-                else:
-                    print(f"No se pudo obtener el child {child_id} para User Story {item['id']}")
-                    item['child_work_items'].append({
-                        "id": child_id,
-                        "error": "No se pudo obtener la información del child",
-                        "work_item_url": "N/A"
-                    })
-
         # Filtrar los work items utilizando la función externa
         filtered_data = filter_work_items(data)
-
-        # 🔴 Verificar si la filtración está eliminando `child_work_items`
-        for i, item in enumerate(filtered_data[:3]):  # Mostramos los primeros 3 resultados
-            print(f"Final User Story {i + 1}: {item}")
-
+        
         if state:
             filtered_data = [item for item in filtered_data if item.get("state") == state]
-
+        
         return filtered_data
 
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=str(e))
-
 
 @app.post("/analyze-ticket")
 async def analyze_ticket_endpoint(
@@ -384,5 +283,3 @@ async def mark_user_story_checked(work_item_id: int):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
-
-

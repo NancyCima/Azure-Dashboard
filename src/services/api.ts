@@ -59,6 +59,7 @@ export interface IncompleteTicket {
   estimatedHours: number | string; // Puede ser un número o "No disponible"
   completedHours: number | string; // Puede ser un número o "No disponible"
   work_item_url: string;
+  work_item_type: string;
 }
 
 export interface AIAnalysisResponse {
