@@ -1,6 +1,6 @@
 import React from 'react';
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, ExternalLink, Calendar, Tag, Clock, User, Flame } from 'lucide-react';
+import { ChevronDown, ChevronRight, ExternalLink, Calendar, Clock, User, Flame } from 'lucide-react';
 import { useTickets } from '../contexts/TicketsContext';
 import Header from '../components/Header';
 import { UserStory, WorkItem } from '../services/api';
@@ -27,6 +27,11 @@ interface Stage {
     };
 }
 
+interface Entregable {
+    number: number;
+    stories: UserStoryWithWorkItems[];
+}
+
 const stages: Stage[] = [
     { id: 1, name: 'Etapa 1', entregableRange: { start: 0, end: 13 } },
     { id: 2, name: 'Etapa 2', entregableRange: { start: 14, end: 34 } },
@@ -49,6 +54,7 @@ function Dashboard() {
     const { tickets, loading, error } = useTickets();
     const [expandedStories, setExpandedStories] = useState<number[]>([]);
     const [expandedStages, setExpandedStages] = useState<number[]>([]);
+    const [expandedEntregables, setExpandedEntregables] = useState<number[]>([]);
 
     const toggleStory = (storyId: number) => {
         setExpandedStories(prev => 
@@ -63,6 +69,14 @@ function Dashboard() {
             prev.includes(stageId)
                 ? prev.filter(id => id !== stageId)
                 : [...prev, stageId]
+        );
+    };
+
+    const toggleEntregable = (entregableNumber: number) => {
+        setExpandedEntregables(prev =>
+            prev.includes(entregableNumber)
+                ? prev.filter(id => id !== entregableNumber)
+                : [...prev, entregableNumber]
         );
     };
 
@@ -190,7 +204,7 @@ function Dashboard() {
                 }));
 
             // Extraer el entregable de los tags
-                const entregable = story.tags?.split(';')
+            const entregable = story.tags?.split(';')
                 .find(tag => tag.trim().toLowerCase().startsWith('entregable'))?.trim();
 
             return {
@@ -207,16 +221,39 @@ function Dashboard() {
             };
         });
 
-     // Organizar las user stories por etapa   
+    // Organizar las user stories por etapa y entregable
     const storiesByStage = stages.map(stage => {
         const storiesInStage = userStories.filter(story => {
             if (!story.entregable) return false;
             const stageForStory = getStageForEntregable(story.entregable);
             return stageForStory?.id === stage.id;
         });
+
+        // Agrupar por entregable
+        const entregables: Entregable[] = [];
+        storiesInStage.forEach(story => {
+            if (!story.entregable) return;
+            
+            const entregableNumber = parseInt(story.entregable.replace(/\D/g, ''));
+            let entregable = entregables.find(d => d.number === entregableNumber);
+            
+            if (!entregable) {
+                entregable = {
+                    number: entregableNumber,
+                    stories: []
+                };
+                entregables.push(entregable);
+            }
+            
+            entregable.stories.push(story);
+        });
+
+        // Ordenar los entregables por número
+        entregables.sort((a, b) => a.number - b.number);
+
         return {
             ...stage,
-            stories: storiesInStage,
+            entregables
         };
     });
 
@@ -247,43 +284,30 @@ function Dashboard() {
                         </a>
                     </div>
                 </td>
-                <td className="px-2 py-4 w-[20%]">
+                <td className="px-2 py-4 w-[25%]">
                     <span className="text-gray-900 line-clamp-2">{story.title}</span>
                 </td>
-                <td className="px-2 py-4 w-[12%]">
+                <td className="px-2 py-4 w-[15%]">
                     <div className="flex items-center text-gray-600">
                         <User className="w-4 h-4 mr-1" />
                         <span className="truncate max-w-[120px]">{story.assignedTo}</span>
                     </div>
                 </td>
-                <td className="px-2 py-4 w-[8%]">
+                <td className="px-2 py-4 w-[10%]">
                     <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         {story.state}
                     </span>
                 </td>
-                <td className="px-2 py-4 w-[12%]">
+                <td className="px-2 py-4 w-[15%]">
                     <div className="flex items-center text-gray-600">
                         <Calendar className="w-4 h-4 mr-1" />
                         {formatDate(story.dueDate)}
                     </div>
                 </td>
-                <td className="px-2 py-4 w-[15%]">
-                    <div className="flex flex-wrap gap-1">
-                        {story.tags.map((tag, index) => (
-                            <span 
-                                key={index}
-                                className="inline-flex items-center px-1.5 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800 truncate max-w-[120px]"
-                            >
-                                <Tag className="w-3 h-3 mr-1 flex-shrink-0" />
-                                <span className="truncate">{tag}</span>
-                            </span>
-                        ))}
-                    </div>
-                </td>
                 <td className="px-2 py-4 w-[12%]">
                     <EffortComparison story={story} />
                 </td>
-                <td className="px-2 py-4 w-[13%]">
+                <td className="px-2 py-4 w-[15%]">
                     <div className="w-full">
                         <div className="flex items-center justify-between mb-1">
                             <span className="text-sm font-medium text-blue-800">
@@ -327,9 +351,6 @@ function Dashboard() {
                                 <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                                     {item.state}
                                 </span>
-                            </td>
-                            <td className="px-2 py-3">
-                                <span className="text-gray-500">-</span>
                             </td>
                             <td className="px-2 py-3">
                                 <span className="text-gray-500">-</span>
@@ -409,31 +430,54 @@ function Dashboard() {
                                                 {stage.name} (Entregables {stage.entregableRange.start} - {stage.entregableRange.end})
                                             </h2>
                                             <span className="ml-4 text-blue-600">
-                                                {stage.stories.length} User Stories
+                                                {stage.entregables.reduce((acc, entregable) => acc + entregable.stories.length, 0)} User Stories
                                             </span>
                                         </div>
                                         
                                         {expandedStages.includes(stage.id) && (
-                                            <div className="overflow-x-auto">
-                                                <table className="w-full table-auto">
-                                                    <thead>
-                                                        <tr className="bg-blue-50">
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[8%]">ID</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[20%]">Título</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[12%]">Asignado a</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[8%]">Estado</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[12%]">Fecha de Entrega</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[15%]">Tags</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[12%]">Esfuerzo</th>
-                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[13%]">Progreso</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody className="divide-y divide-gray-200">
-                                                        {stage.stories.map(story => (
-                                                            <StoryRow key={story.id} story={story} />
-                                                        ))}
-                                                    </tbody>
-                                                </table>
+                                            <div className="p-4">
+                                                {stage.entregables.map(entregable => (
+                                                    <div key={entregable.number} className="mb-4">
+                                                        <div 
+                                                            className="bg-blue-50 p-3 cursor-pointer flex items-center rounded-lg"
+                                                            onClick={() => toggleEntregable(entregable.number)}
+                                                        >
+                                                            {expandedEntregables.includes(entregable.number)
+                                                                ? <ChevronDown className="w-5 h-5 mr-2 text-blue-600" />
+                                                                : <ChevronRight className="w-5 h-5 mr-2 text-blue-600" />
+                                                            }
+                                                            <h3 className="text-lg font-medium text-blue-700">
+                                                                Entregable {entregable.number}
+                                                            </h3>
+                                                            <span className="ml-4 text-blue-600">
+                                                                {entregable.stories.length} User Stories
+                                                            </span>
+                                                        </div>
+
+                                                        {expandedEntregables.includes(entregable.number) && (
+                                                            <div className="mt-4 overflow-x-auto">
+                                                                <table className="w-full table-auto">
+                                                                    <thead>
+                                                                        <tr className="bg-gray-50">
+                                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[8%]">ID</th>
+                                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[25%]">Título</th>
+                                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[15%]">Asignado a</th>
+                                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[10%]">Estado</th>
+                                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[15%]">Fecha de Entrega</th>
+                                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[12%]">Esfuerzo</th>
+                                                                            <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[15%]">Progreso</th>
+                                                                        </tr>
+                                                                    </thead>
+                                                                    <tbody className="divide-y divide-gray-200">
+                                                                        {entregable.stories.map(story => (
+                                                                            <StoryRow key={story.id} story={story} />
+                                                                        ))}
+                                                                    </tbody>
+                                                                </table>
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
                                             </div>
                                         )}
                                     </div>
