@@ -42,7 +42,7 @@ export interface UserStory {
     description: string;
     acceptanceCriteria: string;
     state: string;
-    assigned_to: String;
+    assigned_to: string;
     tags: string;
     due_date: string;
     work_item_url: string;
