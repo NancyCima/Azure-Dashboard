@@ -26,7 +26,6 @@ interface Stage {
     };
     dueDate: string;
     startDate: string;
-    riskLevel: 'low' | 'medium' | 'high';
 }
 
 interface Entregable {
@@ -42,7 +41,6 @@ const stages: Stage[] = [
         entregableRange: { start: 0, end: 13 }, 
         dueDate: '2025-05-23',
         startDate: '2025-02-01',
-        riskLevel: 'low'
     },
     { 
         id: 2, 
@@ -50,7 +48,6 @@ const stages: Stage[] = [
         entregableRange: { start: 14, end: 34 }, 
         dueDate: '2025-09-26',
         startDate: '-',
-        riskLevel: 'medium'
     },
     { 
         id: 3, 
@@ -58,7 +55,6 @@ const stages: Stage[] = [
         entregableRange: { start: 35, end: 55 }, 
         dueDate: '2025-12-19',
         startDate: '-',
-        riskLevel: 'medium'
     },
     { 
         id: 4, 
@@ -66,7 +62,6 @@ const stages: Stage[] = [
         entregableRange: { start: 56, end: 70 }, 
         dueDate: '2026-02-27',
         startDate: '-',
-        riskLevel: 'high'
     }
 ];
 
@@ -87,6 +82,7 @@ const ProgressBar = ({ percentage, showPercentage = true }: { percentage: number
         </div>
     </div>
 );
+
 
 function Dashboard() {
     const { tickets, loading, error } = useTickets();
@@ -131,7 +127,7 @@ function Dashboard() {
         if (stories.length === 0) {
             return (
                 <span className="px-3 py-1 rounded-full text-sm bg-blue-300 text-white">
-                    Bajo riesgo
+                    Riesgo bajo
                 </span>
             );
         }
@@ -142,33 +138,28 @@ function Dashboard() {
         const diffTime = deliveryDate.getTime() - today.getTime();
         const daysRemaining = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
         
-        // Determinar el nivel de riesgo basado en los días restantes
-        let riskLevel: 'low' | 'medium' | 'high' = 'low';
-        
-        if (daysRemaining <= 15) {
-            riskLevel = 'high';
-        } else if (daysRemaining <= 30) {
-            riskLevel = 'medium';
+        // Determinar el estado y el color basado en los días restantes
+        if (daysRemaining > 30) {
+            return (
+                <span className="px-3 py-1 rounded-full text-sm bg-green-500 text-white">
+                    Según lo previsto
+                </span>
+            );
+        } else if (daysRemaining > 15) {
+            return (
+                <span className="px-3 py-1 rounded-full text-sm bg-blue-500 text-white">
+                    Riesgo medio
+                </span>
+            );
         } else {
-            riskLevel = 'low';
+            return (
+                <span className="px-3 py-1 rounded-full text-sm bg-purple-500 text-white">
+                    Riesgo alto
+                </span>
+            );
         }
-        
-        // Determinar el texto de estado basado en el nivel de riesgo
-        let statusText = 'Según lo previsto';
-        
-        // Mapear los niveles de riesgo a clases de color
-        const riskColorClasses = {
-            low: 'bg-green-500 text-white',  // Verde para "Según lo previsto"
-            medium: 'bg-blue-500 text-white', // Azul para riesgo medio
-            high: 'bg-purple-500 text-white'  // Púrpura para riesgo alto
-        };
-        
-        return (
-            <span className={`px-3 py-1 rounded-full text-sm ${riskColorClasses[riskLevel]}`}>
-                {riskLevel === 'low' ? statusText : `Riesgo ${riskLevel === 'medium' ? 'medio' : 'alto'}`}
-            </span>
-        );
     };
+    
 
     const calculateStageEffort = (stories: UserStoryWithWorkItems[]) => {
         const estimatedHours = stories.reduce((sum, story) => {
@@ -431,16 +422,16 @@ function Dashboard() {
                 <td className="px-2 py-4 w-[25%]">
                     <span className="text-gray-900 line-clamp-2">{story.title}</span>
                 </td>
+                <td className="px-2 py-4 w-[10%]">
+                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                        {story.state}
+                    </span>
+                </td>
                 <td className="px-2 py-4 w-[15%]">
                     <div className="flex items-center text-gray-600">
                         <User className="w-4 h-4 mr-1" />
                         <span className="truncate max-w-[120px]">{story.assignedTo}</span>
                     </div>
-                </td>
-                <td className="px-2 py-4 w-[10%]">
-                    <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                        {story.state}
-                    </span>
                 </td>
                 <td className="px-2 py-4 w-[15%]">
                     <div className="flex items-center text-gray-600">
@@ -553,12 +544,12 @@ function Dashboard() {
                                     Etapa
                                 </div>
                                 <div className="grid grid-cols-6 gap-6">
+                                    <div className="text-sm font-semibold text-gray-700">Estado</div>
+                                    <div className="text-sm font-semibold text-gray-700">Días restantes</div>
                                     <div className="text-sm font-semibold text-gray-700">Fecha Inicio</div>
                                     <div className="text-sm font-semibold text-gray-700">Fecha Entrega</div>
-                                    <div className="text-sm font-semibold text-gray-700">Días restantes</div>
-                                    <div className="text-sm font-semibold text-gray-700">Progreso</div>
-                                    <div className="text-sm font-semibold text-gray-700">Estado</div>
                                     <div className="text-sm font-semibold text-gray-700">Esfuerzo</div>
+                                    <div className="text-sm font-semibold text-gray-700">Progreso</div>
                                 </div>
                             </div>
                         </div>
@@ -620,6 +611,14 @@ function Dashboard() {
                                                     </div>
                                                     
                                                     <div className="grid grid-cols-6 gap-6 items-center">
+                                                        <div>
+                                                            {getStageStatus(stage, stage.entregables.flatMap(e => e.stories))}
+                                                        </div>
+
+                                                        <div className="text-sm text-gray-600">
+                                                            {daysUntilDelivery} días
+                                                        </div>
+                                                        
                                                         <div className="text-sm text-gray-600">
                                                             <Calendar className="w-4 h-4 inline mr-1" />
                                                             {formatDate(stage.startDate)}
@@ -631,7 +630,9 @@ function Dashboard() {
                                                         </div>
                                                         
                                                         <div className="text-sm text-gray-600">
-                                                            {daysUntilDelivery} días
+                                                            <span title="Horas estimadas">Est: {effort.estimated}h</span>
+                                                            <br />
+                                                            <span title="Horas completadas">Real: {effort.completed}h</span>
                                                         </div>
                                                         
                                                         <div className="w-32">
@@ -641,15 +642,6 @@ function Dashboard() {
                                                             />
                                                         </div>
                                                         
-                                                        <div>
-                                                            {getStageStatus(stage, stage.entregables.flatMap(e => e.stories))}
-                                                        </div>
-                                                        
-                                                        <div className="text-sm text-gray-600">
-                                                            <span title="Horas estimadas">Est: {effort.estimated}h</span>
-                                                            <br />
-                                                            <span title="Horas completadas">Real: {effort.completed}h</span>
-                                                        </div>
                                                     </div>
                                                 </div>
                                             </div>
@@ -694,8 +686,8 @@ function Dashboard() {
                                                                             <tr className="bg-gray-50">
                                                                                 <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[8%]">ID</th>
                                                                                 <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[25%]">Título</th>
-                                                                                <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[15% ]">Asignado a</th>
                                                                                 <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[10%]">Estado</th>
+                                                                                <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[15% ]">Asignado a</th>
                                                                                 <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[15%]">Fecha de Entrega</th>
                                                                                 <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[12%]">Esfuerzo</th>
                                                                                 <th className="px-2 py-3 text-left text-sm font-semibold text-blue-800 w-[15%]">Progreso</th>
