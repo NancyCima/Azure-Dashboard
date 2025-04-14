@@ -1,7 +1,7 @@
 beautifulsoup4
 fastapi
 langdetect
-openai==0.28.0
+openai>=1.0.0
 pillow
 pydantic==2.6.3
 python-dotenv

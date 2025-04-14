@@ -3,12 +3,25 @@ import io
 import base64
 import json
 import logging
+from dotenv import load_dotenv
 from typing import Dict, List, Optional, Tuple
 from fastapi import HTTPException
 from bs4 import BeautifulSoup
 from PIL import Image
 from langdetect import detect, LangDetectException
-import openai
+from openai import OpenAI
+from openai import APIError, APIConnectionError, AuthenticationError, RateLimitError, BadRequestError
+
+# Load the OpenAI API key from the environment variable
+load_dotenv()
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+
+# Validate OpenAI API key
+if not OPENAI_API_KEY:
+    print("Warning: OPENAI_API_KEY not found in environment variables")
+else:
+    # Configurar cliente
+    client = OpenAI(api_key=OPENAI_API_KEY)
 
 # Configuración de logging
 logging.basicConfig(level=logging.INFO)
@@ -21,23 +34,21 @@ def process_image(image_content: bytes) -> Optional[str]:
     try:
         # Abrir la imagen con PIL
         img = Image.open(io.BytesIO(image_content))
-        original_format = img.format
-        # Se usa PNG para formatos sin pérdida o GIF; sino JPEG.
-        save_format = 'PNG' if original_format in ['PNG', 'GIF'] else 'JPEG'
-        # Convertir a RGB si es necesario
-        if img.mode != 'RGB':
+        # Convertir a formato compatible
+        if img.mode in ('RGBA', 'LA', 'P'):
             img = img.convert('RGB')
-        # Redimensionar si es muy grande (máximo 1024x1024)
+        
+        # Redimensionar manteniendo relación de aspecto
         max_size = (1024, 1024)
         img.thumbnail(max_size, Image.Resampling.LANCZOS)
-        # Guardar la imagen en memoria
-        img_byte_arr = io.BytesIO()
-        img.save(img_byte_arr, format=save_format, quality=85)
-        img_byte_arr = img_byte_arr.getvalue()
+        
+        # Optimizar para calidad y tamaño
+        buffered = io.BytesIO()
+        img.save(buffered, format="JPEG", quality=85, optimize=True)
         # Convertir a base64
-        return base64.b64encode(img_byte_arr).decode('utf-8')
+        return base64.b64encode(buffered.getvalue()).decode('utf-8')
     except Exception as e:
-        logger.error(f"Error processing image: {e}")
+        logger.error(f"Error procesando imagen: {str(e)}")
         return None
 
 def load_general_criteria() -> Optional[Dict]:
@@ -68,8 +79,14 @@ def prepare_analysis_prompt(
     """
     Prepara el prompt para el análisis combinando los datos del ticket, los criterios generales y las imágenes.
     """
+    # Limpieza segura de campos
+    def clean_text(text: Optional[str]) -> str:
+        if text is None:
+            return ""
+        return BeautifulSoup(str(text), 'html.parser').get_text().strip()
+
     # Se limpia el HTML de la descripción y se extraen los criterios existentes.
-    description = BeautifulSoup(ticket_data.get('description', ''), 'html.parser').get_text()
+    description = clean_text(ticket_data.get('description'))
     existing_criteria = extract_existing_criteria(ticket_data)
     
     # Detectar el idioma (se usa español por defecto en caso de fallo)
@@ -89,7 +106,10 @@ def prepare_analysis_prompt(
     
     images_info = ""
     if images:
-        images_info = "Se han proporcionado imágenes relevantes para el análisis.\n" if language == 'es' else "Relevant images have been provided for analysis.\n"
+        if language == 'es':
+            images_info = f"Se han proporcionado {len(images)} imágenes adjuntas para análisis.\n"
+        else:
+            images_info = f"{len(images)} attached images provided for analysis.\n"
     
     prompt_intro = "Analiza esta historia de usuario para verificar su completitud y coherencia" if language == 'es' \
                    else "Analyze this user story for completeness and coherence"
@@ -152,13 +172,16 @@ def parse_analysis_response(analysis: str, language: str) -> Dict:
         elif sections[language]['suggestions'] in line:
             current_section = 'suggestions'
             continue
-        
-        # Agregar ítems a la sección correspondiente
-        if line.startswith('- ') or line.startswith('* '):
+
+        # Agregar ítems manteniendo formato pero limpiando marcadores de lista
+        if any(line.startswith(c) for c in ('- ', '* ', '--', '• ')):
+            cleaned_line = line.lstrip('-• ')  # Elimina todos los símbolos de lista iniciales
+            cleaned_line = cleaned_line.strip()
+            
             if current_section == 'criteria':
-                missing_criteria.append(line[2:].strip())
+                missing_criteria.append(cleaned_line)
             elif current_section == 'suggestions':
-                general_suggestions.append(line[2:].strip())
+                general_suggestions.append(cleaned_line)
     
     return {
         "analysis": analysis,
@@ -176,10 +199,25 @@ def analyze_ticket(
     Analiza el ticket usando GPT-4 de OpenAI.
     """
     # Validar que el ticket tenga contenido para analizar
-    description = ticket_data.get('description', '').strip()
-    acceptance_criteria = ticket_data.get('acceptance_criteria', '').strip()
-    if not description and not acceptance_criteria:
-        raise HTTPException(status_code=400, detail="El ticket no tiene descripción ni criterios de aceptación para analizar")
+    ticket_data = {
+        'title': ticket_data.get('title', 'Sin título'),
+        'description': ticket_data.get('description', ''),
+        'acceptance_criteria': ticket_data.get('acceptance_criteria', ''),
+        **ticket_data  # Mantener cualquier otro campo
+    }
+
+    # Validación con manejo seguro de None
+    has_content = any([
+        bool(str(ticket_data['description']).strip()),
+        bool(str(ticket_data['acceptance_criteria']).strip()),
+        bool(images)
+    ])
+    
+    if not has_content:
+        raise HTTPException(
+            status_code=400,
+            detail="Se requiere descripción, criterios de aceptación o imágenes"
+        )
     
     # Extraer la cadena base64 de cada imagen (si se enviaron)
     base64_images = []
@@ -209,26 +247,62 @@ def analyze_ticket(
         }
     ]
     
+    # Si hay imágenes pero no texto, ajustamos el prompt
+    if base64_images and not ticket_data['description'].strip() and not ticket_data['acceptance_criteria'].strip():
+        messages[1]["content"] = (
+            f"Analiza esta imagen de un ticket de usuario para generar criterios de aceptación y sugerencias:\n\n"
+            f"Título: {ticket_data.get('title', '')}\n\n"
+            "IMPORTANTE: Estructura tu respuesta en dos secciones principales:\n\n"
+            "1. Criterios de Aceptación Sugeridos:\n"
+            "   - Lista de criterios de aceptación basados en la imagen\n"
+            "   - Cada criterio debe comenzar con un guión (-)\n\n"
+            "2. Sugerencias Generales:\n"
+            "   - Mejoras de claridad\n"
+            "   - Consideraciones de usabilidad\n"
+            "   - Validaciones de campos\n"
+            "   - Componentes reutilizables\n"
+            "   - Otras recomendaciones\n\n"
+            "Proporciona tu análisis en español."
+        )
+
+    # Agregar imágenes
+    if base64_images:
+        # Convertir el content del user message a una lista
+        messages[1]["content"] = [
+            {"type": "text", "text": base_prompt}
+        ]
+        
+        for img in base64_images:
+            messages[1]["content"].append({
+                "type": "image_url",
+                "image_url": {
+                    "url": f"data:image/jpeg;base64,{img}"
+                }
+            })
+
+    # Agregar prompt de usuario
+    messages[1]["content"] = [{"type": "text", "text": base_prompt}]
+    
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
             messages=messages,
             max_tokens=1000,
             temperature=0.7
         )
         analysis = response.choices[0].message.content
         return parse_analysis_response(analysis, language)
-    except openai.APIError as e:
-        raise HTTPException(status_code=500, detail=f"Error de API de OpenAI: {str(e)}")
-    except openai.APIConnectionError as e:
-        raise HTTPException(status_code=500, detail=f"Error de conexión con OpenAI: {str(e)}")
-    except openai.RateLimitError as e:
-        raise HTTPException(status_code=429, detail=f"Límite de API de OpenAI excedido: {str(e)}")
-    except openai.AuthenticationError as e:
-        raise HTTPException(status_code=401, detail=f"Error de autenticación de OpenAI: {str(e)}")
-    except openai.BadRequestError as e:
-        detail_msg = f"Solicitud incorrecta a la API de OpenAI: {str(e)}" if language == 'es' else f"Bad request to OpenAI API: {str(e)}"
-        raise HTTPException(status_code=400, detail=detail_msg)
+
+    except APIConnectionError as e:
+        raise HTTPException(500, f"Error de conexión con OpenAI: {str(e)}")
+    except RateLimitError as e:
+        raise HTTPException(429, f"Límite de tasa excedido: {str(e)}")
+    except AuthenticationError as e:
+        raise HTTPException(401, f"Error de autenticación de OpenAI: {str(e)}")
+    except BadRequestError as e:
+        raise HTTPException(400, f"Solicitud inválida: {str(e)}")
+    except APIError as e:
+        raise HTTPException(500, f"Error de API: {str(e)}")
     except Exception as e:
-        logger.error(f"Unexpected error in analyze_ticket: {e}")
-        raise HTTPException(status_code=500, detail="Internal server error")
+        logger.error(f"Error inesperado: {str(e)}")
+        raise HTTPException(500, "Error interno del servidor")

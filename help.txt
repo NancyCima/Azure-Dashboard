@@ -1,0 +1,12 @@
+pip install uvicorn
+pip install fastapi
+pip install requests
+pip install dotenv
+pip install bs4
+pip install Pillow
+pip install langdetect
+pip install openai
+pip install bcrypt
+pip install mysql-connector-python
+pip install python-multipart
+uvicorn main:app --reload

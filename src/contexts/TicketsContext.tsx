@@ -1,11 +1,11 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
-import { api, Ticket, UserStory, IncompleteTicket } from '../services/api';
+import { api, WorkItem } from '../services/api';
 import { useAuth } from './AuthContext';
 
 interface TicketsContextType {
-  tickets: Ticket[];
-  userStories: UserStory[];
-  incompleteTickets: IncompleteTicket[];
+  workitems: WorkItem[];
+  userStories: WorkItem[];
+  incompleteTickets: WorkItem[];
   loading: boolean;
   error: string | null;
   refreshData: () => Promise<void>;
@@ -14,9 +14,9 @@ interface TicketsContextType {
 const TicketsContext = createContext<TicketsContextType | undefined>(undefined);
 
 export function TicketsProvider({ children }: { children: ReactNode }) {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
-  const [userStories, setUserStories] = useState<UserStory[]>([]);
-  const [incompleteTickets, setIncompleteTickets] = useState<IncompleteTicket[]>([]);
+  const [workitems, setWorkitems] = useState<WorkItem[]>([]);
+  const [userStories, setUserStories] = useState<WorkItem[]>([]);
+  const [incompleteTickets, setIncompleteTickets] = useState<WorkItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const { isAuthenticated } = useAuth(); // Escucha el estado de autenticación
@@ -24,18 +24,36 @@ export function TicketsProvider({ children }: { children: ReactNode }) {
   const fetchData = async () => {
     try {
       setLoading(true);
-      const [ticketsData, userStoriesData, incompleteTicketsData] = await Promise.all([
-        api.getTickets(),
-        api.getUserStories(),
-        api.getIncompleteTickets(),
+      const [workitemData] = await Promise.all([
+        api.getWorkitems()
       ]);
+      
+      const userStoriesData = workitemData
+            .filter(ticket => ticket.type === 'User Story'  || ticket.type === 'Technical Challenge' || ticket.type === 'Technical Debt')
+            .filter(ticket => ticket !== undefined
+                && ((ticket.storyPoints === null || ticket.storyPoints === 0) 
+                        || (ticket.acceptance_criteria === null || ticket.acceptance_criteria === '')
+                        || (ticket.description === null || ticket.description === '')));
 
-      setTickets(ticketsData);
+      // Unit todos los child_work_items de las user stories en un solo array
+      const incompleteTicketsData = workitemData
+                                      .filter(ticket => ticket.type === 'User Story') 
+                                      .filter(ticket => ticket !== undefined)
+                                      .filter(ticket => ticket !== undefined && ticket.child_work_items && ticket.child_work_items.length > 0)
+                                      .flatMap(ticket => ticket.child_work_items)
+                                      .filter((ticket): ticket is WorkItem => ticket !== undefined);
+
+      console.log('✅ Tickets incompletos count:', incompleteTicketsData.length);
+      console.log('✅ Tickets completos:', workitemData);
+      console.log('✅ User Stories:', userStoriesData);
+      console.log('✅ Tickets incompletos (otros):', incompleteTicketsData);
+
+      setWorkitems(workitemData);
       setUserStories(userStoriesData);
       setIncompleteTickets(incompleteTicketsData);
       setError(null);
     } catch (err) {
-      setError('Error al cargar los datos');
+      setError('Error al cargar los datos: ' + err);
     } finally {
       setLoading(false);
     }
@@ -50,7 +68,7 @@ export function TicketsProvider({ children }: { children: ReactNode }) {
 
   return (
     <TicketsContext.Provider value={{ 
-      tickets, 
+      workitems, 
       userStories, 
       incompleteTickets, 
       loading, 

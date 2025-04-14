@@ -15,14 +15,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Función de inicio de sesión conectada al backend
     const login = async (username: string, password: string) => {
         try {
-            const formData = new URLSearchParams();
+            const formData = new FormData();
             formData.append('username', username);
             formData.append('password', password);
+            formData.append('grant_type', 'password');
     
-            const response = await axios.post('http://localhost:8000/login', formData, {
+            const response = await axios.post(`${import.meta.env.VITE_BACK_URL}/login`, formData, {
                 headers: {
-                    'Content-Type': 'application/x-www-form-urlencoded',
+                    'Accept': 'application/json',
                 },
+                withCredentials: true
             });
     
             if (response.data.message === 'Inicio de sesión exitoso') {

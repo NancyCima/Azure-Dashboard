@@ -3,13 +3,13 @@
 # Learn more about .gitignore:
 #     https://www.atlassian.com/git/tutorials/saving-changes/gitignore
 
+env/
 venv/
 .env
 __pycache__/
 
 # Node artifact files
 node_modules/
-dist/
 
 # Compiled Java class files
 *.class
@@ -25,7 +25,6 @@ dist/
 
 # Maven
 target/
-dist/
 
 # JetBrains IDE
 .idea/
@@ -55,3 +54,4 @@ Thumbs.db
 Lib
 Scripts
 __pycache__
+env/pyvenv.cfg

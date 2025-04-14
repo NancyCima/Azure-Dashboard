@@ -2,49 +2,81 @@ from fastapi import FastAPI, File, UploadFile, Form, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm
 import requests
-from typing import Optional, List, Dict
+from typing import Optional, List
 import json
-import openai
 import os
 from dotenv import load_dotenv
 from services.ai_analysis import analyze_ticket, process_image, load_general_criteria
 import bcrypt
-import mysql.connector
+from mysql.connector import pooling
+from functools import lru_cache
+from pydantic import BaseModel
 
+class AsignadosRequest(BaseModel):
+    asignados: List[str] = None
 
 load_dotenv()
 
-app = FastAPI()
+app = FastAPI(
+    title="Azure DevOps Dashboard API",
+    description="API para gestionar y analizar User Stories de Azure DevOps con IA",
+    version="1.0.0",
+    docs_url="/docs",
+    redoc_url="/redoc"
+)
 
 # Enable CORS
+ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "https://azure-dashboard-fe-1.onrender.com",
+    "https://azure-dashboard-fe.onrender.com",
+    "http://azure-dashboard-fe-1.onrender.com",
+    "http://azure-dashboard-fe.onrender.com"
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # React dev server
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["*"],
+    max_age=3600,
 )
 
-# API URLs y configuración
-API_BASE_URL = os.getenv("API_BASE_URL")  # API de Azure DevOps
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
+# Centralizar configuración
+class Settings:
+    # API URLs y configuración
+    API_BASE_URL = os.getenv("API_BASE_URL")  # API de Azure DevOps
 
-# Obtener los valores de las variables de entorno
-DB_HOST = os.getenv("DB_HOST")
-DB_USER = os.getenv("DB_USER")
-DB_PASSWORD = os.getenv("DB_PASSWORD")
-DB_NAME = os.getenv("DB_NAME")
+    # Obtener los valores de las variables de entorno
+    DB_HOST = os.getenv("DB_HOST")
+    DB_USER = os.getenv("DB_USER")
+    DB_PASSWORD = os.getenv("DB_PASSWORD")
+    DB_NAME = os.getenv("DB_NAME")
+    
+settings = Settings()
 
 # Conectar a la base de datos
+connection_pool = pooling.MySQLConnectionPool(
+    pool_name="auth_pool",
+    pool_size=5,
+    host="rds-mysql-dev.ch7yo6tzxi4l.us-east-1.rds.amazonaws.com",
+    user="user",
+    password="Asap.2025!@",
+    database="dbProjectsManagement"
+
+    # host=settings.DB_HOST,
+    # user=settings.DB_USER,
+    # password=settings.DB_PASSWORD,
+    # database=settings.DB_NAME    
+)
+
 def get_db_connection():
-    return mysql.connector.connect(
-        host=DB_HOST,
-        user=DB_USER,
-        password=DB_PASSWORD,
-        database=DB_NAME
-    )
+    return connection_pool.get_connection()
 
 # Obtener el hash de la contraseña del usuario
+@lru_cache(maxsize=100) # Caché para evitar sobrecargar la base de datos
 def get_user_password_hash(username: str):
         conn = get_db_connection()
         cursor = conn.cursor()
@@ -54,42 +86,21 @@ def get_user_password_hash(username: str):
         conn.close()
         return result[0] if result else None
 
-# Validate OpenAI API key
-if not OPENAI_API_KEY:
-    print("Warning: OPENAI_API_KEY not found in environment variables")
-else:
-    openai.api_key = OPENAI_API_KEY
-
-def filter_work_items(data):
-    """
-    Filtra los work items según las reglas definidas.
-    - Excluye User Stories con el tag 'US New'.
-    - Excluye work items que dependen de User Stories con el tag 'US New'.
-    """
-    # Identificar las user stories con tag "US New"
-    us_new_ids = {item['id'] for item in data 
-                if item['work_item_type'] == 'User Story' and item.get('tags') == 'US New'}
-
-    # Filtrar los work items
-    filtered_data = []
-    for item in data:
-        # Si es una user story, incluirla solo si no tiene el tag "US New"
-        if item['work_item_type'] == 'User Story':
-            if item.get('tags') != 'US New':
-                filtered_data.append(item)
-        # Si no es una user story, incluirlo solo si no depende de una user story con tag "US New"
-        else:
-            dependencies = item.get('dependencies', [])
-            if not any(dep_id in us_new_ids for dep_id in dependencies):
-                filtered_data.append(item)
-
-    return filtered_data
-
-@app.get("/")
+@app.get("/", 
+    summary="Endpoint raíz",
+    description="Retorna un mensaje de bienvenida",
+    tags=["General"]
+)
 async def root():
     return {"message": "Bienvenido a la API de la nueva aplicación"}
 
-@app.post("/login")
+@app.post("/login",
+    summary="Autenticación de usuario",
+    description="Verifica las credenciales del usuario y permite el acceso al sistema",
+    response_description="Retorna un mensaje de éxito si la autenticación es correcta",
+    tags=["Autenticación"]
+
+)
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
     # Verifica si el usuario existe
     stored_password_hash = get_user_password_hash(form_data.username)
@@ -98,102 +109,13 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         raise HTTPException(status_code=401, detail="Usuario no encontrado")
 
     # Compara la contraseña ingresada con el hash almacenado
-    if bcrypt.checkpw(form_data.password.encode(), stored_password_hash.encode()):
+    if bcrypt.checkpw(
+        form_data.password.encode('utf-8'),  # Contraseña ingresada
+        stored_password_hash.encode('utf-8')  # Hash almacenado
+    ):
         return {"message": "Inicio de sesión exitoso"}
     else:
         raise HTTPException(status_code=401, detail="Contraseña incorrecta")
-
-@app.get("/userstories")
-async def get_user_stories():
-    """
-    Endpoint para obtener solo User Stories desde la API,
-    filtrando aquellas que tienen el campo 'description' vacío,
-    'acceptance_criteria' vacío o ambos vacíos.
-    """
-    try:
-        url = f"{API_BASE_URL}/api/v1/workitems/work-items"
-        response = requests.get(url)
-        response.raise_for_status()
-
-        data = response.json()
-
-        # Filtrar solo User Stories
-        user_stories = [
-            item for item in data
-            if item.get("work_item_type") == "User Story"
-        ]
-
-        # Aplica el filtro general de `filter_work_items`
-        filtered_data = filter_work_items(data)
-
-        # Filtrar solo User Stories
-        user_stories = [
-            item for item in filtered_data
-            if item.get("work_item_type") == "User Story"
-        ]
-        
-        # Función para determinar si un campo está vacío
-        def is_empty(value):
-            """
-            Determina si un campo está vacío.
-            Considera nulo, string vacío, espacios, HTML vacío o valores irrelevantes como "No disponible".
-            """
-            if not value:
-                return True
-            cleaned_value = value.strip()
-            return cleaned_value in ["", "<div></div>", "<br>", "No disponible"]
-
-        # Filtrar User Stories incompletas
-        filtered_user_stories = [
-            story for story in user_stories
-            if is_empty(story['description']) or is_empty(story['acceptance_criteria'])
-        ]
-
-        return filtered_user_stories
-
-    except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
-
-@app.get("/tickets")
-async def get_incomplete_tickets():
-    try:
-        url = f"{API_BASE_URL}/api/v1/workitems/work-items"
-        response = requests.get(url)
-        response.raise_for_status()
-
-        data = response.json()
-
-        # Aplica el filtro general de `filter_work_items`
-        filtered_data = filter_work_items(data)
-
-        # Filtrar tickets que no son User Stories
-        tickets = [
-            {
-                "id": item.get("id"),
-                "title": item.get("title"),
-                "work_item_type": item.get("work_item_type"),
-                "state": item.get("state"),
-                "estimatedHours": (
-                    float(item.get("estimated_hours")) 
-                    if isinstance(item.get("estimated_hours"), (int, float)) 
-                    else item.get("estimated_hours", "No disponible")
-                ),
-                "completedHours": (
-                    float(item.get("completed_hours")) 
-                    if isinstance(item.get("completed_hours"), (int, float)) 
-                    else item.get("completed_hours", "No disponible")
-                ),
-                "description": item.get("description", "").strip(),
-                "work_item_url": item.get("work_item_url")
-            }
-            for item in filtered_data
-            if item.get("work_item_type") != "User Story"
-        ]
-
-        return tickets
-
-    except requests.exceptions.RequestException as e:
-        return {"error": str(e)}
 
 @app.get("/workitems")
 async def get_work_items(state: str = None):
@@ -202,19 +124,52 @@ async def get_work_items(state: str = None):
     """
     try:
         # Realiza una solicitud GET al endpoint de la API
-        url = f"{API_BASE_URL}/api/v1/workitems/work-items"
+        url = f"{settings.API_BASE_URL}/azure-workitems?elementosPorPagina=10000&ignorarBorrados=true"
         response = requests.get(url)
         response.raise_for_status()
 
         data = response.json()
 
-        # Filtrar los work items utilizando la función externa
-        filtered_data = filter_work_items(data)
+        # Obtiene los work items
+        work_items = data.get('workItems', [])
         
         if state:
-            filtered_data = [item for item in filtered_data if item.get("state") == state]
+            work_items = [item for item in work_items if item.get("state") == state]
         
-        return filtered_data
+        return work_items
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/total-reales-por-asignados")
+async def post_totales_reales_por_asignados(request_data: AsignadosRequest):
+    """
+    Endpoint para obtener totales reales por usuarios asignados.
+    """
+    try:
+        asignados = request_data.asignados
+
+        asignadosSeparadosXComa = ','.join(asignados) if asignados else ""
+        # Realiza una solicitud GET al endpoint de la API
+        url = f"{settings.API_BASE_URL}/azure-workitems?elementosPorPagina=10000&ignorarBorrados=true&asignados={asignadosSeparadosXComa}"
+        response = requests.get(url)
+        response.raise_for_status()
+
+        data = response.json()
+
+        # Obtiene los work items
+        work_items = data.get('workItems', [])
+
+        EXCLUDED_TYPES = {"User Story", "Bug", "Feature", "Technical Debt", "poc"}
+
+        sum_completed_hours = 0
+        for item in work_items:
+            completed = item.get("completed_hours")
+            tipo = item.get("type")
+            if completed and completed is not None and completed != "" and completed != "None" and completed > 0 and tipo not in EXCLUDED_TYPES:
+                sum_completed_hours += completed
+
+        return sum_completed_hours
 
     except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=str(e))
@@ -231,8 +186,24 @@ async def analyze_ticket_endpoint(
     try:
         # Convertir el string JSON a diccionario
         ticket_data = json.loads(ticket)
-        if not ticket_data.get('description') and not ticket_data.get('acceptance_criteria'):
-            raise HTTPException(status_code=400, detail="Ticket requires description or acceptance criteria")
+        # Parseo seguro con valores por defecto
+        ticket_data = {
+            'title': ticket_data.get('title', ''),
+            'description': ticket_data.get('description', ''),
+            'acceptance_criteria': ticket_data.get('acceptance_criteria', ''),
+            **ticket_data
+        }
+
+        # Validación temprana
+        if not any([
+            str(ticket_data['description']).strip(),
+            str(ticket_data['acceptance_criteria']).strip(),
+            files
+        ]):
+            raise HTTPException(
+                status_code=400,
+                detail="Se requiere al menos: descripción, criterios de aceptación o imágenes"
+            )
 
         general_criteria = load_general_criteria()
         
@@ -240,6 +211,12 @@ async def analyze_ticket_endpoint(
         images = []
         if files:
             for file in files:
+                if file.content_type not in ['image/jpeg', 'image/png', 'image/gif', 'image/webp']:
+                    raise HTTPException(400, f"Formato no válido: {file.filename}")
+                
+                if file.size > 5 * 1024 * 1024:  # 5MB
+                    raise HTTPException(400, f"Imagen demasiado grande: {file.filename}")
+
                 content = await file.read()
                 base64_img = process_image(content)
                 if base64_img:
@@ -264,20 +241,6 @@ async def analyze_ticket_endpoint(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="Invalid ticket data format")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@app.post("/mark-user-story-checked/{work_item_id}")
-async def mark_user_story_checked(work_item_id: int):
-    """
-    Marca una User Story como revisada agregándole el tag 'US Checked'.
-    """
-    try:
-        url = f"{API_BASE_URL}/api/v1/workitems/{work_item_id}/update-tags"
-        payload = {"tags": ["US Checked"]}
-        response = requests.post(url, json=payload)
-        response.raise_for_status()
-        return {"status": "success", "message": "User story marked as checked"}
-    except requests.exceptions.RequestException as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
