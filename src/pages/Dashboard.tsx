@@ -8,13 +8,12 @@ import ProgressBar from '../components/ProgressBar';
 import StoryRow from '../components/StoryRow';
 import SummaryTable from '../components/SummaryTable';
 import PonderacionTable from '../components/PonderacionTable';
-import { getStageStatus } from '../components/stageStatus';
 import { calcularSemaforos, renderSemaforoEntrega, renderSemaforoConsumo } from '../utils/semaforoUtils';
 import { Entregable, entregableStartDates, entregableDueDates } from '../utils/entregableData';
 import { Stage, stages } from '../utils/stageData';
 import { findTags, normalizeTag } from '../utils/tagUtils';
 import { formatDate } from '../utils/dateUtils';
-import { ponderaciones } from '../utils/ponderacionesData';
+import { calculateEffort } from '../utils/effortCalculations';
 import { getDaysUntilDelivery, getDaysStatusStyle} from '../utils/deliveryDateUtils';
 import {
     calculateUSProgress,
@@ -30,63 +29,6 @@ function Dashboard() {
     const { expandedItems: expandedEntregables, toggleItem: toggleEntregable } = useExpansion<number>();
     const { expandedItems: expandedStories, toggleItem: toggleStory } = useExpansion<number>();
     const [currentView, setCurrentView] = useState<'main' | 'profiles'>('main');
-    
-    const calculateStageEffort = (stories: WorkItem[]) => {
-        const [originalEstimated, correctedEstimated, completedHours, weightedHours] = stories.reduce(
-            ([orig, corr, comp, pond], story) => {
-                const childItems = story.child_work_items || [];
-                const storyEffort = childItems.reduce((acc, item) => {
-                    const estimated = Number(item.estimated_hours ?? 0);
-                    const corrected = Number(item.new_estimate ?? item.estimated_hours ?? 0);
-                    const rawCompleted = item.completed_hours;
-                    let completed = 0;
-
-                    if (
-                        rawCompleted !== null &&
-                        rawCompleted !== undefined &&
-                        !isNaN(Number(rawCompleted)) &&
-                        Number(rawCompleted) >= 0 // Asegurar no negativos
-                    ) {
-                        completed = Number(rawCompleted);
-                    } else {
-                        completed = 0; // Forzar 0 en casos inválidos
-                    }
-                    
-                    //const looseTasks = workitems.filter(item => 
-                    //    (item.type === "Task" || item.type === "Technical Challenge") && 
-                    //    !item.parentId // Si no tienen parent_id, son sueltos
-                    //);
-                    //console.log('looseTasks', looseTasks)
-
-                    // Obtener el nombre del asignado y limpiar posibles espacios extra
-                    const asignado = (item.assignedTo || '').trim();
-                    const factor = ponderaciones[asignado] || 1; // Usar 1 si no encuentra el nombre
-                    
-                    return {
-                      orig: acc.orig + estimated,
-                      corr: acc.corr + corrected,
-                      comp: acc.comp + completed,
-                      pond: acc.pond + (completed * factor)
-                    };
-                  }, { orig: 0, corr: 0, comp: 0, pond: 0 });
-            
-                  return [
-                    orig + storyEffort.orig,
-                    corr + storyEffort.corr,
-                    comp + storyEffort.comp,
-                    pond + storyEffort.pond
-                  ];
-                }, 
-                [0, 0, 0, 0]
-              );
-    
-        return {
-            estimated: Math.round(originalEstimated),
-            corrected: Math.round(correctedEstimated),
-            completed: Math.round(completedHours),
-            weighted: Math.round(weightedHours)
-        };
-    };
 
     const getStageForEntregable = (entregable: string): Stage | undefined => {
         const entregableNumber = parseInt(entregable.replace(/\D/g, ''));
@@ -198,7 +140,7 @@ function Dashboard() {
     //const storiesWithoutEtapa = userStories.filter(story => !story.etapa);
     console.log("storiesWithoutEtapa", storiesWithoutEtapa);
 
-    const effortWithoutEtapa = calculateStageEffort(storiesWithoutEtapa);
+    const effortWithoutEtapa = calculateEffort(storiesWithoutEtapa);
 
     // User stories con múltiples etapas (para posible indicador visual)
     const storiesWithMultipleEtapas = userStories.filter(
@@ -266,7 +208,7 @@ function Dashboard() {
 
                             {/* Header row con una estructura de columnas consistente */}
                             <div className="bg-gray-100 p-3 mb-4 rounded-lg">
-                                <div className="grid grid-cols-[300px_repeat(5,1fr)] gap-6">
+                                <div className="grid grid-cols-[300px_200px_140px_200px_200px_200px] gap-4 items-center">
                                     <div className="text-sm font-semibold text-gray-700">Etapa</div>
                                     <div className="text-sm font-semibold text-gray-700">Estado</div>
                                     <div className="text-sm font-semibold text-gray-700">Días restantes</div>
@@ -304,12 +246,12 @@ function Dashboard() {
                                         const totalStories = stage.entregables.reduce(
                                             (sum, e) => sum + e.stories.length, 0
                                         );
-                                        const effort = calculateStageEffort(
+                                        const effort = calculateEffort(
                                             stage.entregables.flatMap(e => e.stories)
                                         );
 
                                         // Calcular los datos para los semáforos
-                                        const semaforoData = calcularSemaforos(
+                                        const semaforoStage = calcularSemaforos(
                                             stage.entregables.flatMap(e => e.stories) // Todas las historias de la etapa
                                         );
         
@@ -320,7 +262,7 @@ function Dashboard() {
                                                     className="bg-blue-100 p-4 cursor-pointer"
                                                     onClick={() => toggleStage(stage.id)}
                                                 >
-                                                    <div className="grid grid-cols-[300px_repeat(5,1fr)] gap-6 items-center">
+                                                    <div className="grid grid-cols-[300px_200px_140px_200px_200px_200px] gap-4 items-center">
                                                         <div className="flex items-center">
                                                             {expandedStages.includes(stage.id) 
                                                                 ? <ChevronDown className="w-6 h-6 text-blue-600" />
@@ -337,19 +279,18 @@ function Dashboard() {
                                                             </div>
                                                         </div>
 
-                                                        
-                                                        <div className="flex flex-col gap-2">
+                                                        <div className="flex flex-row gap-4 items-center">
                                                             <div className="flex flex-col items-center">
                                                                 <span className="text-xs text-gray-600 mb-1">Avance</span>
-                                                                {renderSemaforoEntrega(semaforoData.porcentajeAvance, stage.dueDate)}
+                                                                {renderSemaforoEntrega(semaforoStage, stage.dueDate)}
                                                             </div>
                                                             <div className="flex flex-col items-center">
                                                                 <span className="text-xs text-gray-600 mb-1">Consumo</span>
-                                                                {renderSemaforoConsumo(semaforoData)}
+                                                                {renderSemaforoConsumo(semaforoStage)}
                                                             </div>
                                                         </div>
         
-                                                        <div className={`text-sm ${getDaysStatusStyle(getDaysUntilDelivery(stage.dueDate))}`}>
+                                                        <div className={`text-sm ${getDaysStatusStyle(getDaysUntilDelivery(stage.dueDate))} h-[80px] flex items-center justify-center`}>
                                                             {getDaysUntilDelivery(stage.dueDate)} días
                                                         </div>
                                                         
@@ -400,7 +341,7 @@ function Dashboard() {
                                                                         className="bg-blue-50 p-3 cursor-pointer rounded-lg"
                                                                         onClick={() => toggleEntregable(entregable.number)}
                                                                     >
-                                                                        <div className="grid grid-cols-[300px_repeat(5,1fr)] gap-6 items-center">
+                                                                        <div className="grid grid-cols-[300px_200px_140px_200px_200px_200px] gap-4 items-center">
                                                                             <div className="flex items-center ml-4">
                                                                                 {expandedEntregables.includes(entregable.number)
                                                                                     ? <ChevronDown className="w-5 h-5 mr-2 text-blue-600" />
@@ -412,10 +353,10 @@ function Dashboard() {
                                                                                         : `Entregable ${entregable.number}`}
                                                                                 </h3>
                                                                             </div>
-                                                                            <div className="flex flex-col gap-2">
+                                                                            <div className="flex flex-row gap-4 items-center ">
                                                                                 <div className="flex flex-col items-center">
                                                                                     <span className="text-xs text-gray-600 mb-1">Avance</span>
-                                                                                    {renderSemaforoEntrega(semaforoDataEntregables.porcentajeAvance, entregable.dueDate)}
+                                                                                    {renderSemaforoEntrega(semaforoDataEntregables, entregable.dueDate)}
                                                                                 </div>
                                                                                 <div className="flex flex-col items-center">
                                                                                     <span className="text-xs text-gray-600 mb-1">Consumo</span>
@@ -438,9 +379,9 @@ function Dashboard() {
                                                                             <div className="text-sm text-gray-600">
                                                                                 <div className="grid grid-cols-[auto_auto] gap-x-2">
                                                                                     <span title="Horas estimadas" className="font-medium">Est:</span>
-                                                                                    <span className="text-right">{(calculateStageEffort(entregable.stories)).estimated.toLocaleString('de-DE')}h</span>
+                                                                                    <span className="text-right">{(calculateEffort(entregable.stories)).estimated.toLocaleString('de-DE')}h</span>
                                                                                     <span title="Horas ponderadas" className="font-medium">Pond:</span>
-                                                                                    <span className="text-right">{(calculateStageEffort(entregable.stories)).weighted.toLocaleString('de-DE')}h</span>
+                                                                                    <span className="text-right">{(calculateEffort(entregable.stories)).weighted.toLocaleString('de-DE')}h</span>
                                                                                 </div>
                                                                             </div>
                                                                             <div>
@@ -497,7 +438,7 @@ function Dashboard() {
                                                 className="bg-blue-100 p-4 cursor-pointer"
                                                 onClick={() => toggleStage(-2)} // Usamos -2 para "Sin etapa"
                                             >
-                                                <div className="grid grid-cols-[300px_repeat(5,1fr)] gap-6 items-center">
+                                                <div className="grid grid-cols-[300px_200px_140px_200px_200px_200px] gap-4 items-center">
                                                     <div className="flex items-center">
                                                         {expandedStages.includes(-2) 
                                                             ? <ChevronDown className="w-6 h-6 text-blue-600" />
