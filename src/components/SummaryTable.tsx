@@ -106,6 +106,8 @@ const SummaryTable: React.FC<SummaryTableProps> = ({ tickets }) => {
                     progress: progress
                 };
             }));
+
+            console.log(profileData)
     
             // Calcular totales CON LOS DATOS ACTUALES (no con profileHours)
             const totals = profileData.reduce((acc, profile) => ({

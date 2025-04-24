@@ -10,3 +10,4 @@ requests
 uvicorn
 mysql-connector-python
 bcrypt
+holidays

@@ -43,7 +43,8 @@ function Dashboard() {
         .filter(ticket => 
             ticket.type === 'User Story' ||
             ticket.type === 'Technical Debt' ||
-            ticket.type === 'Technical Challenge'
+            ticket.type === 'Technical Challenge' || 
+            ticket.type === 'Technical Task'
         )
         .filter(ticket => ticket.state !== "Removed") // Excluir tickets con estado "Removed"
         .map(story => {
@@ -165,7 +166,7 @@ function Dashboard() {
     const notAssigned = workitems.filter(story => !story.assignedTo && story.completed_hours);
     console.log(`Cantidad de workitems no asignados: ${notAssigned.length}`);
     console.log("notAssigned", notAssigned);
-
+    
     return (
         <div className="min-h-screen bg-white">
             <Header 
@@ -208,10 +209,10 @@ function Dashboard() {
 
                             {/* Header row con una estructura de columnas consistente */}
                             <div className="bg-gray-100 p-3 mb-4 rounded-lg">
-                                <div className="grid grid-cols-[300px_200px_140px_200px_200px_200px] gap-4 items-center">
+                                <div className="grid grid-cols-[minmax(300px,1fr)_140px_120px_200px_250px_140px] gap-4 items-center">
                                     <div className="text-sm font-semibold text-gray-700">Etapa</div>
-                                    <div className="text-sm font-semibold text-gray-700">Estado</div>
-                                    <div className="text-sm font-semibold text-gray-700">Días restantes</div>
+                                    <div className="text-sm font-semibold text-gray-700 pl-4">Estado</div>
+                                    <div className="text-sm font-semibold text-gray-700 pl-4">Días hábiles restantes</div>
                                     <div className="text-sm font-semibold text-gray-700">Fechas</div>
                                     <div className="text-sm font-semibold text-gray-700">Esfuerzo</div>
                                     <div className="text-sm font-semibold text-gray-700">Progreso</div>
@@ -258,11 +259,8 @@ function Dashboard() {
                                         return (
                                             <div key={stage.id} className="bg-white rounded-lg shadow">
                                                 {/* Cabecera de etapa con grid consistente */}
-                                                <div 
-                                                    className="bg-blue-100 p-4 cursor-pointer"
-                                                    onClick={() => toggleStage(stage.id)}
-                                                >
-                                                    <div className="grid grid-cols-[300px_200px_140px_200px_200px_200px] gap-4 items-center">
+                                                <div className="bg-blue-100 p-4 cursor-pointer min-h-[80px]" onClick={() => toggleStage(stage.id)}>
+                                                    <div className="grid grid-cols-[minmax(300px,1fr)_140px_120px_200px_250px_140px] gap-4 items-center h-full">
                                                         <div className="flex items-center">
                                                             {expandedStages.includes(stage.id) 
                                                                 ? <ChevronDown className="w-6 h-6 text-blue-600" />
@@ -279,18 +277,18 @@ function Dashboard() {
                                                             </div>
                                                         </div>
 
-                                                        <div className="flex flex-row gap-4 items-center">
-                                                            <div className="flex flex-col items-center">
+                                                        <div className="flex flex-row gap-4 items-center h-full">
+                                                            <div className="flex flex-col items-center justify-center h-full">
                                                                 <span className="text-xs text-gray-600 mb-1">Avance</span>
                                                                 {renderSemaforoEntrega(semaforoStage, stage.dueDate)}
                                                             </div>
-                                                            <div className="flex flex-col items-center">
+                                                            <div className="flex flex-col items-center justify-center h-full">
                                                                 <span className="text-xs text-gray-600 mb-1">Consumo</span>
                                                                 {renderSemaforoConsumo(semaforoStage)}
                                                             </div>
                                                         </div>
-        
-                                                        <div className={`text-sm ${getDaysStatusStyle(getDaysUntilDelivery(stage.dueDate))} h-[80px] flex items-center justify-center`}>
+
+                                                        <div className={`flex items-center justify-center h-full ${getDaysStatusStyle(getDaysUntilDelivery(stage.dueDate), stageProgress)}`}>
                                                             {getDaysUntilDelivery(stage.dueDate)} días
                                                         </div>
                                                         
@@ -301,12 +299,16 @@ function Dashboard() {
                                                             </div>
                                                             <div>
                                                                 <Calendar className="w-4 h-4 inline mr-1" />
+                                                                Compromiso: {formatDate(stage.dueDate)}
+                                                            </div>
+                                                            <div>
+                                                                <Calendar className="w-4 h-4 inline mr-1" />
                                                                 Entrega: {formatDate(stage.dueDate)}
                                                             </div>
                                                         </div>
                                                         
                                                         <div className="text-sm text-gray-600">
-                                                            <div className="grid grid-cols-[auto_auto] gap-x-2">
+                                                            <div className="grid grid-cols-[repeat(2,minmax(40px,1fr))] gap-x-[2px] gap-y-1">
                                                                 <span title="Horas estimadas" className="font-medium">Est:</span>
                                                                 <span className="text-right">{effort.estimated.toLocaleString('de-DE')}h</span>
                                                                 <span title="Horas corregidas" className="font-medium">Corr:</span>
@@ -317,7 +319,7 @@ function Dashboard() {
                                                                 <span className="text-right">{effort.weighted.toLocaleString('de-DE')}h</span>
                                                             </div>
                                                         </div>
-                                                        <div>
+                                                        <div className="w-[140px]">
                                                             <ProgressBar 
                                                                 percentage={stageProgress} 
                                                                 showPercentage={true}
@@ -334,6 +336,8 @@ function Dashboard() {
                                                                 entregable.stories // Historias del entregable
                                                             );
 
+                                                            const entregableProgress= calculateEntregableProgress(entregable.stories)
+
                                                             return (
                                                                 <div key={entregable.number} className="mb-4">
                                                                     {/* Entregable con grid consistente */}
@@ -341,7 +345,7 @@ function Dashboard() {
                                                                         className="bg-blue-50 p-3 cursor-pointer rounded-lg"
                                                                         onClick={() => toggleEntregable(entregable.number)}
                                                                     >
-                                                                        <div className="grid grid-cols-[300px_200px_140px_200px_200px_200px] gap-4 items-center">
+                                                                        <div className="grid grid-cols-[300px_150px_120px_200px_250px_200px] gap-4 items-center">
                                                                             <div className="flex items-center ml-4">
                                                                                 {expandedEntregables.includes(entregable.number)
                                                                                     ? <ChevronDown className="w-5 h-5 mr-2 text-blue-600" />
@@ -363,13 +367,17 @@ function Dashboard() {
                                                                                     {renderSemaforoConsumo(semaforoDataEntregables)}
                                                                                 </div>
                                                                             </div>
-                                                                            <div className={`text-sm ${getDaysStatusStyle(getDaysUntilDelivery(entregable.dueDate))}`}>
+                                                                            <div className={`text-sm ${getDaysStatusStyle(getDaysUntilDelivery(entregable.dueDate), entregableProgress)}`}>
                                                                                 {getDaysUntilDelivery(entregable.dueDate)} días
                                                                             </div>
                                                                             <div className="flex flex-col text-sm text-gray-600">
                                                                                 <div>
                                                                                     <Calendar className="w-4 h-4 inline mr-1" />
                                                                                     Inicio: {formatDate(entregable.startDate)}
+                                                                                </div>
+                                                                                <div>
+                                                                                    <Calendar className="w-4 h-4 inline mr-1" />
+                                                                                    Compromiso: {formatDate(entregable.dueDate)}
                                                                                 </div>
                                                                                 <div>
                                                                                     <Calendar className="w-4 h-4 inline mr-1" />
@@ -386,7 +394,7 @@ function Dashboard() {
                                                                             </div>
                                                                             <div>
                                                                                 <ProgressBar 
-                                                                                    percentage={calculateEntregableProgress(entregable.stories)} 
+                                                                                    percentage={entregableProgress} 
                                                                                     showPercentage={true}
                                                                                 />
                                                                             </div>
@@ -438,7 +446,7 @@ function Dashboard() {
                                                 className="bg-blue-100 p-4 cursor-pointer"
                                                 onClick={() => toggleStage(-2)} // Usamos -2 para "Sin etapa"
                                             >
-                                                <div className="grid grid-cols-[300px_200px_140px_200px_200px_200px] gap-4 items-center">
+                                                <div className="grid grid-cols-[300px_150px_120px_200px_250px_200px] gap-4 items-center">
                                                     <div className="flex items-center">
                                                         {expandedStages.includes(-2) 
                                                             ? <ChevronDown className="w-6 h-6 text-blue-600" />

@@ -48,6 +48,14 @@ export function TicketsProvider({ children }: { children: ReactNode }) {
       console.log('✅ User Stories:', userStoriesData);
       console.log('✅ Tickets incompletos (otros):', incompleteTicketsData);
 
+      const totalCompletedHours = workitemData.reduce((acc, ticket) => {
+        const completedHours = ticket.completed_hours || 0;
+        return acc + completedHours;
+      }
+      , 0);
+
+      console.log('✅ Total horas completadas:', totalCompletedHours);
+
       setWorkitems(workitemData);
       setUserStories(userStoriesData);
       setIncompleteTickets(incompleteTicketsData);
