@@ -19,7 +19,7 @@ export interface WorkItem {
     work_item_url: string;
     storyPoints?: string | number;
     estimated_hours?: number;
-    new_estimate?: number;
+    new_estimate?: number | string;
     completed_hours?: number;
     dueDate?: string;
     tags?: string[];

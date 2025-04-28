@@ -15,7 +15,11 @@ export const calculateEffort = (stories: WorkItem[]) => {
         }
 
         const estimated = Number(ticket.estimated_hours ?? 0);
-        const corrected = Number(ticket.new_estimate ?? ticket.estimated_hours ?? 0);
+        const corrected = ticket.new_estimate !== null && 
+                           ticket.new_estimate !== "" && 
+                           !isNaN(Number(ticket.new_estimate))
+            ? Number(ticket.new_estimate)
+            : estimated;  // Usar estimated si new_estimate es inválido
         const completed = Number(ticket.completed_hours ?? 0);
         const asignado = (ticket.assignedTo || '').trim();
         const factor = ponderaciones[asignado] || 1;

@@ -8,29 +8,71 @@ interface Ticket {
     assignedTo: string | { displayName: string };
     completed_hours?: number;
     estimated_hours?: number;
-    new_estimate?: number; 
+    new_estimate?: number | string; 
     child_work_items?: Ticket[];
 }
 
 interface SummaryTableProps {
     tickets: Ticket[];
-    totalEffort: {
-        completed: number;
-        estimated: number;
-        corrected: number;
-        weighted: number;
-        team: number;
-    };
 }
 
-const SummaryTable: React.FC<SummaryTableProps> = ({ tickets, totalEffort }) => {
-    const [profileHours, setProfileHours] = React.useState<any[]>([]);
-    const [totalProgress, setTotalProgress] = React.useState(0);
+interface ProfileData {
+    role: string;
+    estimatedHours: number;
+    teamEstimate: number;
+    correctedEstimate: number;
+    completedHours: number;
+    weightedHours: number;
+    progress: string;
+}
+
+interface TableData {
+    profiles: ProfileData[];
+    totals: {
+        estimatedHours: number;
+        teamEstimate: number;
+        correctedEstimate: number;
+        completedHours: number;
+        weightedHours: number;
+    };
+    totalProgress: number;
+}
+
+const SummaryTable: React.FC<SummaryTableProps> = ({ tickets }) => {
+    const [tableData, setTableData] = React.useState<TableData | null>(null);
     const [loading, setLoading] = React.useState(true);
 
     React.useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
+
+            // Tickets no asignados
+            const unassignedTickets = tickets.filter(ticket => {
+                const assignee = typeof ticket.assignedTo === 'string' 
+                    ? ticket.assignedTo 
+                    : ticket.assignedTo?.displayName;
+                const isParent = (ticket.child_work_items?.length ?? 0) > 0;
+                return !assignee && !isParent;
+            });
+        
+            // Calcular métricas para no asignados
+            const unassignedMetrics = unassignedTickets.reduce(
+                (acc, ticket) => ({
+                teamEstimate: acc.teamEstimate + (Number(ticket.estimated_hours ?? 0) || 0),
+                completedHours: acc.completedHours + (Number(ticket.completed_hours) || 0),
+                correctedEstimate: acc.correctedEstimate + (
+                    // Validación robusta para new_estimate
+                    ticket.new_estimate !== null &&
+                    ticket.new_estimate !== undefined &&
+                    ticket.new_estimate !== "" &&
+                    !isNaN(Number(ticket.new_estimate))
+                        ? Number(ticket.new_estimate)
+                        : (Number(ticket.estimated_hours) || 0) // Fallback a estimated_hours
+                ),
+                weightedHours: acc.weightedHours + ((Number(ticket.completed_hours) || 0) * 1) // Sin ponderación
+                }),
+                { teamEstimate: 0, completedHours: 0, correctedEstimate: 0, weightedHours: 0 }
+            );
             
             const profileData = profiles.map((profile) => {
                 // Filtrar tickets por los nombres asignados al perfil
@@ -48,11 +90,23 @@ const SummaryTable: React.FC<SummaryTableProps> = ({ tickets, totalEffort }) => 
                             ? ticket.assignedTo 
                             : ticket.assignedTo?.displayName;
                         const factor = ponderaciones[assignee || ''] || 1;
+
+                        // Solo considerar tickets que no son User Stories
+                        if (ticket.child_work_items && ticket.child_work_items.length > 0) {
+                            return acc;
+                        }
                         
                         return {
                             teamEstimate: acc.teamEstimate + (Number(ticket.estimated_hours) || 0),
                             completedHours: acc.completedHours + (Number(ticket.completed_hours) || 0),
-                            correctedEstimate: acc.correctedEstimate + (Number(ticket.new_estimate ?? ticket.estimated_hours) || 0),
+                            correctedEstimate: acc.correctedEstimate + (
+                                ticket.new_estimate !== null && 
+                                ticket.new_estimate !== undefined && 
+                                ticket.new_estimate !== "" &&
+                                !isNaN(Number(ticket.new_estimate))
+                                    ? Number(ticket.new_estimate)
+                                    : (Number(ticket.estimated_hours) || 0)
+                            ),
                             weightedHours: acc.weightedHours + ((Number(ticket.completed_hours) || 0) * factor)
                         };
                     },
@@ -78,18 +132,50 @@ const SummaryTable: React.FC<SummaryTableProps> = ({ tickets, totalEffort }) => 
                 };
             });
 
-            const totalCompleted = profileData.reduce((sum, p) => sum + p.completedHours, 0);
-            const totalEstimated = profileData.reduce((sum, p) => sum + p.estimatedHours, 0);
+            // Agregar fila de no asignados
+            profileData.push({
+                role: 'No asignado',
+                estimatedHours: 0,
+                teamEstimate: unassignedMetrics.teamEstimate,
+                correctedEstimate: unassignedMetrics.correctedEstimate,
+                completedHours: unassignedMetrics.completedHours,
+                weightedHours: unassignedMetrics.weightedHours,
+                progress: 'N/A'
+            });
+
+            // Calcular totales sumando los valores de cada perfil
+            const totals = profileData.reduce((acc, profile) => ({
+                estimatedHours: acc.estimatedHours + profile.estimatedHours,
+                teamEstimate: acc.teamEstimate + profile.teamEstimate,
+                correctedEstimate: acc.correctedEstimate + profile.correctedEstimate,
+                completedHours: acc.completedHours + profile.completedHours,
+                weightedHours: acc.weightedHours + profile.weightedHours
+            }), {
+                estimatedHours: 0,
+                teamEstimate: 0,
+                correctedEstimate: 0,
+                completedHours: 0,
+                weightedHours: 0
+            });
+
+            const totalProgress = totals.estimatedHours > 0
+                ? (totals.weightedHours / totals.estimatedHours) * 100
+                : 0;
             
-            setProfileHours(profileData);
-            setTotalProgress((totalCompleted / totalEstimated) * 100);
-            setLoading(false);
+            setTableData({
+                profiles: profileData,
+                totals,
+                totalProgress
+            });
+            setTimeout(() => {
+                setLoading(false);
+            }, 1000); // Espera 1000 ms antes de sacar el loading
         };
         
         fetchData();
     }, [tickets]);
 
-    if (loading) {
+    if (loading || !tableData) {
         return (
             <div className="flex justify-center items-center py-4">
                 <p className="text-blue-800 animate-pulse">Cargando resumen...</p>
@@ -112,7 +198,7 @@ const SummaryTable: React.FC<SummaryTableProps> = ({ tickets, totalEffort }) => 
                     </tr>
                 </thead>
                 <tbody>
-                    {profileHours.map((profile) => (
+                    {tableData.profiles.map((profile) => (
                         <tr key={profile.role} className="border-t border-gray-200">
                             <td className="p-1">{profile.role}</td>
                             <td className="p-1">
@@ -128,7 +214,11 @@ const SummaryTable: React.FC<SummaryTableProps> = ({ tickets, totalEffort }) => 
                                 {loading ? <Skeleton /> : profile.completedHours.toLocaleString()}
                             </td>
                             <td className="p-1">
-                                {loading ? <Skeleton /> : profile.weightedHours.toLocaleString()}
+                                {loading ? <Skeleton /> : profile.weightedHours.toLocaleString(
+                                    'es-ES', { 
+                                    minimumFractionDigits: 2, 
+                                    maximumFractionDigits: 2 }
+                                )}
                             </td>
                             <td className="p-1">
                                 {loading ? <Skeleton /> : profile.progress}
@@ -137,12 +227,16 @@ const SummaryTable: React.FC<SummaryTableProps> = ({ tickets, totalEffort }) => 
                     ))}
                     <tr className="font-bold border-t-2 border-black bg-gray-100">
                         <td className="p-1">Total</td>
-                        <td className="p-1">{totalEffort.estimated.toLocaleString()}</td>
-                        <td className="p-1">{totalEffort.team.toLocaleString()}</td>
-                        <td className="p-1">{totalEffort.corrected.toLocaleString()}</td>
-                        <td className="p-1">{totalEffort.completed.toLocaleString()}</td>
-                        <td className="p-1">{totalEffort.weighted.toLocaleString()}</td>
-                        <td className="p-1">{totalProgress.toFixed(2).replace('.', ',')}%</td>
+                        <td className="p-1">{tableData.totals.estimatedHours.toLocaleString()}</td>
+                        <td className="p-1">{tableData.totals.teamEstimate.toLocaleString()}</td>
+                        <td className="p-1">{tableData.totals.correctedEstimate.toLocaleString()}</td>
+                        <td className="p-1">{tableData.totals.completedHours.toLocaleString()}</td>
+                        <td className="p-1">{tableData.totals.weightedHours.toLocaleString(
+                            'es-ES', { 
+                            minimumFractionDigits: 2, 
+                            maximumFractionDigits: 2 }
+                        )}</td>
+                        <td className="p-1">{tableData.totalProgress.toFixed(2).replace('.', ',')}%</td>
                     </tr>
                 </tbody>
             </table>

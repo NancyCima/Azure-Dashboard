@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ChevronDown, ChevronRight, Calendar, Clock, User } from 'lucide-react';
+import { ChevronDown, ChevronRight, Calendar} from 'lucide-react';
 import { useTickets as useWorkitems } from '../contexts/TicketsContext';
 import { WorkItem } from '../services/api';
 import { useExpansion } from '../hooks/useExpansion';
@@ -13,7 +13,7 @@ import { Entregable, entregableStartDates, entregableDueDates } from '../utils/e
 import { Stage, stages } from '../utils/stageData';
 import { findTags, normalizeTag } from '../utils/tagUtils';
 import { formatDate } from '../utils/dateUtils';
-import { calculateEffort, calculateTeamEstimate } from '../utils/effortCalculations';
+import { calculateEffort } from '../utils/effortCalculations';
 import { getDaysUntilDelivery, getDaysStatusStyle} from '../utils/deliveryDateUtils';
 import {
     calculateUSProgress,
@@ -30,7 +30,9 @@ function Dashboard() {
     const [currentView, setCurrentView] = useState<'main' | 'profiles'>('main');
 
     const getStageForEntregable = (entregable: string): Stage | undefined => {
-        const entregableNumber = parseInt(entregable.replace(/\D/g, ''));
+        const regex = /\d+/;
+        const match = regex.exec(entregable);
+        const entregableNumber = parseInt(match?.[0] ?? '');
         return stages.find(stage => 
             entregableNumber >= stage.entregableRange.start && 
             entregableNumber <= stage.entregableRange.end
@@ -132,7 +134,6 @@ function Dashboard() {
         story,
         ...(story.child_work_items || [])
       ]);
-    const totalEffortAllStories = calculateEffort(allTickets);
 
     // User stories sin etapa (para mostrar al final)
     const storiesWithoutEtapa = userStories.filter(story => !story.etapa);
