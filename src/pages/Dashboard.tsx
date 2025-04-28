@@ -67,14 +67,15 @@ function Dashboard() {
             ...story,
             etapa: assignedEtapa,
             entregable: entregables[0],
-            allEtapas: etapas,
-            allEntregables: entregables
+            allEtapas: etapas, // Guardamos todas por si necesitamos mostrar esta info
+            allEntregables: entregables // Guardamos todas por si necesitamos mostrar esta info
         };
     });
 
     // Organizar las user stories por etapa y entregable
     const storiesByStage = stages.map(stage => {
         const storiesInStage = userStories.filter(story => {
+            // Si tiene etapa definida, verificar si coincide con la etapa actual
             if (story.etapa) {
                 const etapaNormalized = normalizeTag(story.etapa);
                 return etapaNormalized.number === stage.id;
@@ -82,7 +83,7 @@ function Dashboard() {
             return false;
         });
 
-        // Agrupar por entregable
+        // Agrupar por entregable (incluyendo historias sin entregable)
         const entregables: Entregable[] = [];
         const storiesWithoutEntregable: WorkItem[] = [];
         
@@ -114,7 +115,7 @@ function Dashboard() {
         // Si hay historias sin entregable, las agregamos como un entregable especial
         if (storiesWithoutEntregable.length > 0) {
             entregables.push({
-                number: -1,
+                number: -1, // Usamos -1 para identificar historias sin entregable
                 stories: storiesWithoutEntregable,
                 startDate: "No disponible",
                 dueDate: "No disponible"
@@ -133,23 +134,23 @@ function Dashboard() {
       ]);
     const totalEffortAllStories = calculateEffort(allTickets);
 
-    // Tickets sin etapa (para mostrar al final)
-    const ticketsWithoutEtapa = userStories.filter(story => !story.etapa);
-    console.log("ticketsWithoutEtapa", ticketsWithoutEtapa);
+    // User stories sin etapa (para mostrar al final)
+    const storiesWithoutEtapa = userStories.filter(story => !story.etapa);
+    console.log("storiesWithoutEtapa", storiesWithoutEtapa);
 
-    const effortWithoutEtapa = calculateEffort(ticketsWithoutEtapa);
+    const effortWithoutEtapa = calculateEffort(storiesWithoutEtapa);
 
-    // Tickets con múltiples etapas (para posible indicador visual)
+    // User stories con múltiples etapas (para posible indicador visual)
     const storiesWithMultipleEtapas = userStories.filter(
         story => story.allEtapas && story.allEtapas.length > 1
     );
     console.log("storiesWithMultipleEtapas", storiesWithMultipleEtapas);
 
-    // Tickets sin entregable
+    // User stories sin entregable
     const storiesWithoutEntregableGeneral = userStories.filter(story => !story.entregable);
     console.log("storiesWithoutEntregableGeneral", storiesWithoutEntregableGeneral);
 
-    // Tickets con múltiples entregables
+    // User stories con múltiples entregables
     const storiesWithMultipleEntregables = userStories.filter(
         story => story.allEntregables && story.allEntregables.length > 1
     );
@@ -165,6 +166,7 @@ function Dashboard() {
     
     const allNames = [...new Set(workitems.map(story => story.assignedTo))];
     console.log("Personas asignadas:", allNames);
+
     return (
         <div className="min-h-screen bg-white">
             <Header 
@@ -199,14 +201,7 @@ function Dashboard() {
                                             tickets={allTickets.map(ticket => ({
                                                 ...ticket,
                                                 completed_hours: ticket.completed_hours ?? 0
-                                            }))} 
-                                            totalEffort={{
-                                                completed: totalEffortAllStories.completed,
-                                                estimated: totalEffortAllStories.estimated,
-                                                corrected: totalEffortAllStories.corrected,
-                                                weighted: totalEffortAllStories.weighted,
-                                                team: calculateTeamEstimate(allTickets) // <-- Usar allTickets aquí
-                                            }}
+                                            }))}
                                         />
                                     </div>
                                 </div>
@@ -258,7 +253,7 @@ function Dashboard() {
 
                                         // Calcular los datos para los semáforos
                                         const semaforoStage = calcularSemaforos(
-                                            stage.entregables.flatMap(e => e.stories)
+                                            stage.entregables.flatMap(e => e.stories) // Todas las historias de la etapa
                                         );
         
                                         return (
@@ -444,7 +439,7 @@ function Dashboard() {
                                         );
                                     })}
                                     {/* Mostrar User Stories sin Etapa */}
-                                    {ticketsWithoutEtapa.length > 0 && (
+                                    {storiesWithoutEtapa.length > 0 && (
                                             <div className="bg-white rounded-lg shadow">
                                             {/* Cabecera con estilo de etapa */}
                                             <div 
@@ -462,8 +457,8 @@ function Dashboard() {
                                                                 Sin etapa
                                                             </h2>
                                                             <div className="text-sm mt-1">
-                                                                <span className="font-bold text-blue-700 text-lg">{getCompletedStoriesCount(ticketsWithoutEtapa)}</span>
-                                                                <span className="text-gray-600">/{ticketsWithoutEtapa.length} User Stories</span>
+                                                                <span className="font-bold text-blue-700 text-lg">{getCompletedStoriesCount(storiesWithoutEtapa)}</span>
+                                                                <span className="text-gray-600">/{storiesWithoutEtapa.length} User Stories</span>
                                                             </div>
                                                         </div>
                                                     </div>
@@ -489,7 +484,7 @@ function Dashboard() {
                                                     </div>
                                                     <div>
                                                         <ProgressBar 
-                                                            percentage={calculateEntregableProgress(ticketsWithoutEtapa)} 
+                                                            percentage={calculateEntregableProgress(storiesWithoutEtapa)} 
                                                             showPercentage={true}
                                                         />
                                                     </div>
@@ -512,7 +507,7 @@ function Dashboard() {
                                                             </tr>
                                                         </thead>
                                                         <tbody className="divide-y divide-gray-200">
-                                                            {ticketsWithoutEtapa.map(story => (
+                                                            {storiesWithoutEtapa.map(story => (
                                                                 <StoryRow
                                                                     key={story.id}
                                                                     story={story}

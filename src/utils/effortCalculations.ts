@@ -4,6 +4,16 @@ import { ponderaciones } from "./ponderacionesData";
 export const calculateEffort = (stories: WorkItem[]) => {
     // Función auxiliar para calcular esfuerzo de un ticket individual
     const calculateTicketEffort = (ticket: WorkItem) => {
+        // Solo procesar tickets que no son User Stories o que no tienen child_work_items
+        if (ticket.child_work_items && ticket.child_work_items.length > 0) {
+            return {
+                estimated: 0,
+                corrected: 0,
+                completed: 0,
+                weighted: 0
+            };
+        }
+
         const estimated = Number(ticket.estimated_hours ?? 0);
         const corrected = Number(ticket.new_estimate ?? ticket.estimated_hours ?? 0);
         const completed = Number(ticket.completed_hours ?? 0);
@@ -21,7 +31,6 @@ export const calculateEffort = (stories: WorkItem[]) => {
 
     // Calcular esfuerzo total incluyendo tickets hijos y el ticket padre
     const calculateTotalEffort = (story: WorkItem) => {
-        
         // Calcular esfuerzo de los tickets hijos
         const childrenEffort = (story.child_work_items || []).reduce((acc, item) => {
             const itemEffort = calculateTicketEffort(item);
@@ -33,8 +42,16 @@ export const calculateEffort = (stories: WorkItem[]) => {
             };
         }, { estimated: 0, corrected: 0, completed: 0, weighted: 0 });
 
+        // Si el ticket padre no tiene hijos, calcular su propio esfuerzo
+        const parentEffort = calculateTicketEffort(story);
+
         // Sumar esfuerzo del padre y los hijos
-        return childrenEffort;
+        return {
+            estimated: childrenEffort.estimated + parentEffort.estimated,
+            corrected: childrenEffort.corrected + parentEffort.corrected,
+            completed: childrenEffort.completed + parentEffort.completed,
+            weighted: childrenEffort.weighted + parentEffort.weighted
+        };
     };
 
     // Calcular el esfuerzo total de todas las historias
@@ -56,9 +73,21 @@ export const calculateEffort = (stories: WorkItem[]) => {
     };
 };
 
-// En utils/effortCalculations.ts
 export const calculateTeamEstimate = (stories: WorkItem[]) => {
-  return stories.reduce((acc, story) => {
-      return acc + (story.estimated_hours || 0);
-  }, 0);
+    return stories.reduce((acc, story) => {
+        const getValidNumber = (value: any) => 
+            value !== null && value !== undefined && value !== "" && !isNaN(value) 
+                ? Number(value) 
+                : 0;
+
+        if (story.child_work_items && story.child_work_items.length > 0) {
+            return acc + story.child_work_items.reduce((sum, item) => {
+                const estimate = getValidNumber(item.new_estimate) || getValidNumber(item.estimated_hours);
+                return sum + estimate;
+            }, 0);
+        }
+        
+        const estimate = getValidNumber(story.new_estimate) || getValidNumber(story.estimated_hours);
+        return acc + estimate;
+    }, 0);
 };
