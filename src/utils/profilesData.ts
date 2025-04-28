@@ -17,7 +17,12 @@ export const profiles = [
             "Matias Martearena",
             "Santiago Dos Santos",
             "Walter Gazzanego",
-            "Fabian Figueredo",
-            "Nazarena Iriel Pantanetti"
+            "Nazarena Iriel Pantanetti",
+            "Nancy Lucia Cima",
+            "Pablo Peralta",
+            "Paula Agüero",
+            "Javier Rostagno",
+            "Mateo Rabaia",
+            "Juan Maria Gonzalez Cornejo"
         ] }
 ];

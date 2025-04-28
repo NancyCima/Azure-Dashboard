@@ -2,58 +2,63 @@ import { WorkItem } from "../services/api";
 import { ponderaciones } from "./ponderacionesData";
 
 export const calculateEffort = (stories: WorkItem[]) => {
-    const [originalEstimated, correctedEstimated, completedHours, weightedHours] = stories.reduce(
-        ([orig, corr, comp, pond], story) => {
-            const childItems = story.child_work_items || [];
-            const storyEffort = childItems.reduce((acc, item) => {
-                const estimated = Number(item.estimated_hours ?? 0);
-                const corrected = Number(item.new_estimate ?? item.estimated_hours ?? 0);
-                const rawCompleted = item.completed_hours;
-                let completed = 0;
+    // Función auxiliar para calcular esfuerzo de un ticket individual
+    const calculateTicketEffort = (ticket: WorkItem) => {
+        const estimated = Number(ticket.estimated_hours ?? 0);
+        const corrected = Number(ticket.new_estimate ?? ticket.estimated_hours ?? 0);
+        const completed = Number(ticket.completed_hours ?? 0);
+        const asignado = (ticket.assignedTo || '').trim();
+        const factor = ponderaciones[asignado] || 1;
+        const weighted = completed * factor;
 
-                if (
-                    rawCompleted !== null &&
-                    rawCompleted !== undefined &&
-                    !isNaN(Number(rawCompleted)) &&
-                    Number(rawCompleted) >= 0 // Asegurar no negativos
-                ) {
-                    completed = Number(rawCompleted);
-                } else {
-                    completed = 0; // Forzar 0 en casos inválidos
-                }
-                
-                //const looseTasks = workitems.filter(item => 
-                //    (item.type === "Task" || item.type === "Technical Challenge") && 
-                //    !item.parentId // Si no tienen parent_id, son sueltos
-                //);
-                //console.log('looseTasks', looseTasks)
+        return {
+            estimated,
+            corrected,
+            completed,
+            weighted
+        };
+    };
 
-                // Obtener el nombre del asignado y limpiar posibles espacios extra
-                const asignado = (item.assignedTo || '').trim();
-                const factor = ponderaciones[asignado] || 1; // Usar 1 si no encuentra el nombre
-                
-                return {
-                  orig: acc.orig + estimated,
-                  corr: acc.corr + corrected,
-                  comp: acc.comp + completed,
-                  pond: acc.pond + (completed * factor)
-                };
-              }, { orig: 0, corr: 0, comp: 0, pond: 0 });
+    // Calcular esfuerzo total incluyendo tickets hijos y el ticket padre
+    const calculateTotalEffort = (story: WorkItem) => {
         
-              return [
-                orig + storyEffort.orig,
-                corr + storyEffort.corr,
-                comp + storyEffort.comp,
-                pond + storyEffort.pond
-              ];
-            }, 
-            [0, 0, 0, 0]
-          );
+        // Calcular esfuerzo de los tickets hijos
+        const childrenEffort = (story.child_work_items || []).reduce((acc, item) => {
+            const itemEffort = calculateTicketEffort(item);
+            return {
+                estimated: acc.estimated + itemEffort.estimated,
+                corrected: acc.corrected + itemEffort.corrected,
+                completed: acc.completed + itemEffort.completed,
+                weighted: acc.weighted + itemEffort.weighted
+            };
+        }, { estimated: 0, corrected: 0, completed: 0, weighted: 0 });
+
+        // Sumar esfuerzo del padre y los hijos
+        return childrenEffort;
+    };
+
+    // Calcular el esfuerzo total de todas las historias
+    const totalEffort = stories.reduce((acc, story) => {
+        const storyEffort = calculateTotalEffort(story);
+        return {
+            estimated: acc.estimated + storyEffort.estimated,
+            corrected: acc.corrected + storyEffort.corrected,
+            completed: acc.completed + storyEffort.completed,
+            weighted: acc.weighted + storyEffort.weighted
+        };
+    }, { estimated: 0, corrected: 0, completed: 0, weighted: 0 });
 
     return {
-        estimated: Math.round(originalEstimated),
-        corrected: Math.round(correctedEstimated),
-        completed: Math.round(completedHours),
-        weighted: Math.round(weightedHours)
+        estimated: Math.round(totalEffort.estimated),
+        corrected: Math.round(totalEffort.corrected),
+        completed: Math.round(totalEffort.completed),
+        weighted: Math.round(totalEffort.weighted)
     };
+};
+
+// En utils/effortCalculations.ts
+export const calculateTeamEstimate = (stories: WorkItem[]) => {
+  return stories.reduce((acc, story) => {
+      return acc + (story.estimated_hours || 0);
+  }, 0);
 };
