@@ -28,95 +28,56 @@ const SummaryTable: React.FC<SummaryTableProps> = ({ tickets, totalEffort }) => 
     const [totalProgress, setTotalProgress] = React.useState(0);
     const [loading, setLoading] = React.useState(true);
 
-    // Cálculos memorizados con nombres normalizados
-    const ticketAssignments = React.useMemo(() => 
-        tickets.reduce((acc, ticket) => {
-            const assignee = typeof ticket.assignedTo === 'string' 
-                ? ticket.assignedTo 
-                : ticket.assignedTo?.displayName;
-            acc[assignee] = (acc[assignee] || 0) + (Number(ticket.estimated_hours) || 0);
-            return acc;
-        }, {} as Record<string, number>),
-    [tickets]);
-
-    const completedTicketAssignments = React.useMemo(() => 
-        tickets.reduce((acc, ticket) => {
-            const assignee = typeof ticket.assignedTo === 'string' 
-                ? ticket.assignedTo 
-                : ticket.assignedTo?.displayName;
-            const hours = Number(ticket.completed_hours) || 0;
-            acc[assignee] = (acc[assignee] || 0) + hours;
-            return acc;
-        }, {} as Record<string, number>),
-    [tickets]);
-
-    const weightedTicketAssignments = React.useMemo(() => 
-        tickets.reduce((acc, ticket) => {
-            const assignee = typeof ticket.assignedTo === 'string' 
-                ? ticket.assignedTo 
-                : ticket.assignedTo?.displayName;
-            const estimate = ticket.completed_hours ?? 0;
-            const factor = ponderaciones[assignee] || 1;
-            acc[assignee] = (acc[assignee] || 0) + (Number(estimate) * factor);
-            return acc;
-        }, {} as Record<string, number>),
-    [tickets]);
-
-    const correctedTicketAssignments = React.useMemo(() => 
-        tickets.reduce((acc, ticket) => {
-            const assignee = typeof ticket.assignedTo === 'string' 
-                ? ticket.assignedTo 
-                : ticket.assignedTo?.displayName;
-            const estimate = ticket.new_estimate ?? ticket.estimated_hours ?? 0;
-            acc[assignee] = (acc[assignee] || 0) + Number(estimate);
-            return acc;
-        }, {} as Record<string, number>),
-    [tickets]);
-
     React.useEffect(() => {
         const fetchData = async () => {
             setLoading(true);
             
-            // Calcular todo localmente sin API
             const profileData = profiles.map((profile) => {
-                const teamEstimate = profile.assignedNames.reduce(
-                    (sum, name) => sum + (ticketAssignments[name] || 0),
-                    0
+                // Filtrar tickets por los nombres asignados al perfil
+                const profileTickets = tickets.filter(ticket => {
+                    const assignee = typeof ticket.assignedTo === 'string' 
+                        ? ticket.assignedTo 
+                        : ticket.assignedTo?.displayName;
+                    return profile.assignedNames.includes(assignee || '');
+                });
+
+                // Calcular horas estimadas y completadas para el perfil
+                const { teamEstimate, completedHours, correctedEstimate, weightedHours } = profileTickets.reduce(
+                    (acc, ticket) => {
+                        const assignee = typeof ticket.assignedTo === 'string' 
+                            ? ticket.assignedTo 
+                            : ticket.assignedTo?.displayName;
+                        const factor = ponderaciones[assignee || ''] || 1;
+                        
+                        return {
+                            teamEstimate: acc.teamEstimate + (Number(ticket.estimated_hours) || 0),
+                            completedHours: acc.completedHours + (Number(ticket.completed_hours) || 0),
+                            correctedEstimate: acc.correctedEstimate + (Number(ticket.new_estimate ?? ticket.estimated_hours) || 0),
+                            weightedHours: acc.weightedHours + ((Number(ticket.completed_hours) || 0) * factor)
+                        };
+                    },
+                    { teamEstimate: 0, completedHours: 0, correctedEstimate: 0, weightedHours: 0 }
                 );
 
-                const localHours = profile.assignedNames.reduce(
-                    (sum, name) => sum + (completedTicketAssignments[name] || 0),
-                    0
-                );
-
-                const weightedEstimate = profile.assignedNames.reduce(
-                    (sum, name) => sum + (weightedTicketAssignments[name] || 0),
-                    0
-                );
-
-                const correctedEstimate = profile.assignedNames.reduce(
-                    (sum, name) => sum + (correctedTicketAssignments[name] || 0),
-                    0
-                );
-
-                const progress = ((weightedEstimate / profile.estimatedHours) * 100)
-                    .toLocaleString('es-ES', { 
-                        minimumFractionDigits: 2, 
-                        maximumFractionDigits: 2 
-                    }) + "%";
+                const progress = profile.estimatedHours > 0
+                    ? ((weightedHours / profile.estimatedHours) * 100)
+                        .toLocaleString('es-ES', { 
+                            minimumFractionDigits: 2, 
+                            maximumFractionDigits: 2 
+                        }) + "%"
+                    : "0.00%";
 
                 return {
                     role: profile.role,
                     estimatedHours: profile.estimatedHours,
-                    completedHours: localHours,
                     teamEstimate,
                     correctedEstimate,
-                    weightedEstimate,
+                    completedHours,
+                    weightedHours,
                     progress
                 };
             });
 
-            // Calcular progreso total basado en datos locales
             const totalCompleted = profileData.reduce((sum, p) => sum + p.completedHours, 0);
             const totalEstimated = profileData.reduce((sum, p) => sum + p.estimatedHours, 0);
             
@@ -167,7 +128,7 @@ const SummaryTable: React.FC<SummaryTableProps> = ({ tickets, totalEffort }) => 
                                 {loading ? <Skeleton /> : profile.completedHours.toLocaleString()}
                             </td>
                             <td className="p-1">
-                                {loading ? <Skeleton /> : profile.weightedEstimate?.toLocaleString()}
+                                {loading ? <Skeleton /> : profile.weightedHours.toLocaleString()}
                             </td>
                             <td className="p-1">
                                 {loading ? <Skeleton /> : profile.progress}
